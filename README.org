@@ -1,0 +1,78 @@
+# -*- org-mode: -*-
+#+title: README
+#+author: reverberationFromAbyss(深渊回响)
+#+email: no email provided
+#+date: May.30, 2024
+
+#+options: toc:2
+
+#+seq_todo: todo(t@) feature(F@) issue(i!/@) wip(w@) fixme(f!/@) knwon(k!/@) | done(d!) canceled(c!/@) abort(a!/@)
+
+* Project: XJTLU-InfoCo-dino-proj
+本项目用于: XJTLU 暑期实践活动项目 及 XJTLU InfoCo Computer Club 社团招新活动
+
+* Content
+#+TOC: tables
+
+* Background
+
+(I'm from China and is not good at English, feel free to point out my grammar mistakes)
+(Thank you for reading this)
+
+* Goals [0/2]
++ [ ] 分析 google 小孔龙彩蛋代码 [0/5]
+  - [ ] 小孔龙游戏主函数
+  - [ ] 小孔龙游戏主循环
+  - [ ] 小孔龙游戏函数调用图
+  - [ ] 小孔龙游戏各函数功能简介
+  - [ ] 小孔龙游戏各函数修改建议
++ [ ] 修改 google 小孔龙彩蛋代码 [0/5]
+  - [ ] 小孔龙游戏单行功能修改及对应 cheat sheet
+  - [ ] 小孔龙游戏功能解藕
+  - [ ] 小孔龙生命值系统
+  - [ ] 小孔龙技能系统
+
+* WIP Issues
+** wip 制作函数调用图
+- State "wip"        from              [2024-06-12 Wed 06:46]
+** wip 进度报告
+DEADLINE: <2024-06-20 Thu> SCHEDULED: <2024-06-15 Sat>
+- State "wip"        from              [2024-06-12 Wed 06:47] \\
+  报告目前个人分析进度
+  包含:
+  目前已经分析理解的函数名称，对应功能简介，被调用关系，
+  若已经对修改有想法，可以同时写下修改方式和对应能实现的功能
+#
+
+* todo Install
+- State "todo"       from              [2024-05-30 Thu 01:30]
+It is not finished yet,
+thus it cannot being installed for now.
+#
+
+* todo Usage
+- State "todo"       from              [2024-05-30 Thu 01:30]
+Same reason as `Install' section.
+#
+
+* todo Project Structures
+- State "todo"       from              [2024-05-30 Thu 01:31]
+The project is not organized yet.
+#
+
+* Stuff
+Everyone write your github account here!
+
+#
+
+* Contribute
+提交规范参见 `./doc/README.git'
+You may request issues?
+However, I'm still a college student, may have not that times to answer in time.
+#
+
+* License
+BSD-3Clause License.
+
+All code extra from chromium is open source under BSD-3Clause License, which can be viewed at `./doc/LICENSE.chromium'
+

@@ -1,0 +1,68 @@
+# -*- org-mode: -*-
+#+title: README
+#+author: reverberationFromAbyss(深渊回响)
+#+email: no email provided
+#+date: May.30, 2024
+
+#+options: toc:2
+
+#+seq_todo: todo(t@) feature(F@) issue(i!/@) wip(w@) fixme(f!/@) knwon(k!/@) | done(d!) canceled(c!/@) abort(a!/@)
+
+* 修改和协作
+** 克隆完整项目到本地
+#+begin_src shell
+  git clone https://github.com/ReverberationFromAbyss/XJTLU-InfoCo-Dino-proj.git
+#+end_src
+或
+#+begin_src shell
+  git clone git@github.com:ReverberationFromAbyss/XJTLU-InfoCo-Dino-proj.git
+#+end_src
+** 切换分支
+#+begin_src shell
+  git switch dev
+  git switch -c <your feature name>
+#+end_src
+** 提交
+#+begin_src shell
+  git push <your feature name> <your feature name>
+#+end_src
+
+* Git log convention
+** Format:
+#+begin_src xml
+  <type>(<scope>): <subject>
+  <BLANK LINE>
+  <body>
+  <BLANK LINE>
+  <footer>
+#+end_src
+
+** header
+*** <type>
++ feat,     new feature
++ fix,      bug fix
++ docs,     document part
++ style,    style changes
++ refactor, no new feature or bug fix
++ test,     add or change exist testes
++ chore,    change of building system
++ build,    change of building system, add dependences
++ perf,     performance improving
++ ci,       change of automate processes, or Continuous Integration about changes
++ revert,   rollback
+*** <scope>
+Influence scope.
+*** <subject>
+Summary of commit
+*** <body>
+detailed description.
+*** <footer>
++ break changes:
+  description: to changes, reason, and approach
++ issue closing:
+  Eg.
+#+begin_src yaml
+  Close #234
+#+end_src
+
+#  LocalWords:  Eg
