@@ -11,7 +11,6 @@
 * Project: XJTLU-InfoCo-dino-proj
 本项目用于: XJTLU 暑期实践活动项目 及 XJTLU InfoCo Computer Club 社团招新活动
 
-* Content
 #+TOC: tables
 
 * Background
@@ -65,7 +64,10 @@ The project is not organized yet.
 
 * Stuff
 github: @ReverberationFromAbyss
+
 github: @MalachiteN
+
+github: @Leonsu-l
 # split
 
 * Contribute
@@ -75,7 +77,7 @@ However, I'm still a college student, may have not that times to answer in time.
 # split
 
 * License
-BSD-3Clause License.
+Apache License version 2
 
 All code extra from chromium is open source under BSD-3Clause License, which can be viewed at `./doc/LICENSE.chromium'
 
