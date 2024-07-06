@@ -1,3 +1,5 @@
+// 警告：本文件依赖life.js，请先导入 life.js 的内容
+
 Runner.mikiriTime = 0;
 Runner.collisionTime = Infinity;
 Runner.gameoverflag = 0;

@@ -1,12 +1,12 @@
-heart = new Image(5,5);
-heart.src = 'https://undertale.com/favicon.ico';
+heart = new Image(20,20);
+heart.src = 'https://raw.githubusercontent.com/MalachiteN/XJTLU-InfoCo-Dino-proj/mala/mod/img/heart.png';
 heart.onload = function() {
     Life = function(canvas, canvasWidth){
         this.canvas = canvas;
         this.canvasCtx =
             /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
         this.x = 0;
-        this.y = 22;
+        this.y = 25;
         this.sprite = heart;
         this.count = 5;
         this.canvasWidth = canvasWidth;
@@ -14,9 +14,10 @@ heart.onload = function() {
     }
     
     Life.dimensions = {
-        WIDTH: 5,
-        HEIGHT: 5,
-        DEST_WIDTH: 50,
+        WIDTH: 25,
+        HEIGHT: 25,
+        DEST_WIDTH: 30,
+        START_DEST: 38
     };
     
     Life.prototype = {
@@ -28,7 +29,7 @@ heart.onload = function() {
         },
     
         calcXPos(canvasWidth) {
-            this.x = canvasWidth - Life.dimensions.DEST_WIDTH;
+            this.x = canvasWidth - Life.dimensions.START_DEST;
         },
     
         draw(pos){
@@ -38,7 +39,9 @@ heart.onload = function() {
                 this.canvasCtx.drawImage(
                     this.sprite,
                     targetX,
-                    targetY
+                    targetY,
+                    Life.dimensions.WIDTH,
+                    Life.dimensions.HEIGHT
                 );
             }
         },
@@ -51,4 +54,3 @@ heart.onload = function() {
     }
     Runner.life = new Life(Runner.instance_.canvas, Runner.instance_.dimensions.WIDTH);
 }
-
