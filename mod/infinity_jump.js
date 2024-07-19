@@ -1,3 +1,6 @@
+Runner.duckingStartTime = Infinity;
+Runner.LastDuckingLength = 0;
+
 Runner.prototype.onKeyDown = function (e) {
     // Prevent native page scrolling whilst tapping on mobile.
     if (IS_MOBILE && this.playing) {
@@ -58,6 +61,7 @@ Runner.prototype.onKeyDown = function (e) {
                 } else if (!this.tRex.jumping && !this.tRex.ducking) {
                     // Duck.
                     this.tRex.setDuck(true);
+                    Runner.duckingStartTime = new Date().getTime();
                 }
             }
         }

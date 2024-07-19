@@ -1,5 +1,5 @@
 heart = new Image(20,20);
-heart.src = 'https://raw.githubusercontent.com/MalachiteN/XJTLU-InfoCo-Dino-proj/mala/mod/img/heart.png';
+heart.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAAEnQAABJ0Ad5mH3gAAABISURBVChTYwCBNWvW/AdhMAcJIIszoisICQlhBNHo4hgKcQEmKE0QUF8hVoejA5AHwQpBAJdiWCjAFYIArqDCCkCKMU1nYAAAXmgoJKpWkvoAAAAASUVORK5CYII=';
 heart.onload = function() {
     Life = function(canvas, canvasWidth){
         this.canvas = canvas;
@@ -50,7 +50,7 @@ heart.onload = function() {
             for (let i = 0; i < this.count; i++) {
                 this.draw(i)
             }
-        }
+        },
     }
     Runner.life = new Life(Runner.instance_.canvas, Runner.instance_.dimensions.WIDTH);
 }
