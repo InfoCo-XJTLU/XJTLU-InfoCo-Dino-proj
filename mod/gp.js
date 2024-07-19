@@ -1,4 +1,3 @@
-// 警告：本文件依赖life.js，请先导入 life.js 的内容
 
 Runner.mikiriTime = 0;
 Runner.collisionTime = Infinity;
@@ -15,7 +14,11 @@ Runner.prototype.onKeyUp = function (e) {
         this.tRex.speedDrop = false;
         this.tRex.setDuck(false);
 
-        Runner.mikiriTime = new Date().getTime(); //见切时间
+        //INFOCO_MODIFIED
+        Runner.mikiriTime = new Date().getTime(); //抬头时刻
+        Runner.LastDuckingLength = Runner.mikiriTime - Runner.duckingStartTime;
+        Runner.duckingStartTime = Infinity;
+
     } else if (this.crashed) {
         // Check that enough time has elapsed before allowing jump key to restart.
         const deltaTime = getTimeStamp() - this.time;
@@ -85,7 +88,6 @@ Runner.prototype.update = function() {
         this.horizon.update(
             deltaTime, this.currentSpeed, hasObstacles, showNightMode);
       }
-      Runner.life.update();
 
       // Check for collisions.
       let collision = hasObstacles &&
@@ -124,8 +126,7 @@ Runner.prototype.update = function() {
       }
 
       // INFOCO MODIFIED BEGIN
-
-      nowtime = new Date().getTime(); //获取当前时间
+      var nowtime = new Date().getTime(); //获取当前时间
 
       if((!collision) && (nowtime - Runner.collisionTime <= 200)){
         this.distanceRan += this.currentSpeed * deltaTime / this.msPerFrame;
@@ -135,27 +136,45 @@ Runner.prototype.update = function() {
         }
       }else{
         //this.gameOver();
-        // 不立即 game over 而是先记录撞击时间，如果±0.1秒内GP成功则能够取消掉这次 game over
+        // 不立即 game over 而是先记录撞击时间
         if (Runner.collisionTime == Infinity) {
             Runner.collisionTime = nowtime;
         }
         collision = false;
       }
 
-      if (Math.abs(Runner.mikiriTime - Runner.collisionTime) <= 200) {
+      var absdt = Math.abs(Runner.mikiriTime - Runner.collisionTime);
+      var texteffect = 0;
+
+      if (absdt <= 160 && Runner.LastDuckingLength >= 1100) { // 如果头部下压时间大于咏唱时间并且±80ms内GP成功则能够取消掉这次 game over
         Runner.collisionTime = Infinity;
         this.horizon.obstacles[0].remove = true;
         this.playSound(this.soundFx.BUTTON_PRESS);
+        if(absdt <= 40){ // 如果±40ms内GP成功则额外加分
+          Runner.instance_.distanceMeter.addBonus(1000);
+          Runner.textEffectController.push('trex', '斩铁剑 58500');
+          Runner.textEffectController.push('score', '+1000');
+          Runner.textEffectController.push('remark', 'PERFECT');
+          texteffect = 1000;
+        } else {
+          Runner.instance_.distanceMeter.addBonus(500);
+          Runner.textEffectController.push('trex', '斩铁剑 48000');
+          Runner.textEffectController.push('score', '+500');
+          Runner.textEffectController.push('remark', 'GOOD');
+          texteffect = 500;
+        }
       }
 
+      // 真正的 game over 判定
       if(Runner.gameoverflag == 1){
         collision = true;
         this.gameOver();
       }
 
-      // 真正的 game over 判定
       if(nowtime - Runner.collisionTime >= 100){
         Runner.life.count-=1;
+        Runner.textEffectController.push('life', '-1 HP');
+        Runner.textEffectController.push('remark', 'MISS');
         Runner.collisionTime = Infinity;
         this.horizon.obstacles[0].remove = true;
         if(Runner.life.count == 0){
@@ -202,18 +221,37 @@ Runner.prototype.update = function() {
       this.tRex.update(deltaTime);
       this.scheduleNextUpdate();
     }
+
+    //INFOCO MODIFY
+    // INFOCO MODIFY
+    if(!this.inverted){
+      this.canvasCtx.fillStyle = '#000000';
+      this.canvasCtx.strokeStyle = '#000000';
+    }else{
+      this.canvasCtx.fillStyle = '#ffffff';
+      this.canvasCtx.strokeStyle = '#ffffff';
+    }
+    Runner.life.update();
+    Runner.textEffectController.update();
+    Runner.casting.update();
   }
 
 Runner.prototype.restart = function () {
   if (!this.raqId) {
+    if(matchMedia('(prefers-color-scheme: dark)')){
+      this.canvasCtx.fillStyle = '#000000';
+    } else {
+      this.canvasCtx.fillStyle = '#FFFFFF';
+    }
     this.playCount++;
+    
     this.runningTime = 0;
     this.setPlayStatus(true);
     this.toggleSpeed();
     this.paused = false;
     /**INFOCO MODIFIED*/ Runner.mikiriTime = 0;
     /**INFOCO MODIFIED*/ Runner.collisionTime = Infinity;
-    /**INFOCO MODIFIED*/ Runner.life = new Life(Runner.instance_.canvas, Runner.instance_.dimensions.WIDTH);
+    /**INFOCO MODIFIED*/ Runner.life = new Life(Runner.instance_.canvas, Runner.instance_.dimensions.WIDTH)
     /**INFOCO MODIFIED*/ Runner.gameoverflag = 0;
     this.crashed = false;
     this.distanceRan = 0;
