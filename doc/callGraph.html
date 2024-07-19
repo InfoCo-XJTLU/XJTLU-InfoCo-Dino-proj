@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="utf8">
+<head>
+  <title>Jelly</title>
+  <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1">
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.23.0/dist/cytoscape.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/layout-base@2.0.1/layout-base.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cose-base@2.2.0/cose-base.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/webcola@3.4.0/WebCola/cola.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-cola@2.5.1/cytoscape-cola.min.js"></script>
+  <!-- Extra dependencies for fcose layout
+  <script src="https://unpkg.com/layout-base/layout-base.js"></script>
+  <script src="https://unpkg.com/cose-base/cose-base.js"></script>
+  <script src="https://unpkg.com/cytoscape-fcose/cytoscape-fcose.js"></script>
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-expand-collapse@4.1.0/cytoscape-expand-collapse.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cytoscape-panzoom@2.5.3/cytoscape.js-panzoom.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.3/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-panzoom@2.5.3/cytoscape-panzoom.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      overflow: hidden;
+    }
+    #cy {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      right: 0;
+      z-index: 900;
+    }
+    #info {
+      position: absolute;
+      bottom: 20px;
+      left: 10px;
+      z-index: 800;
+      opacity: 0.8;
+      font-size: 15px;
+    }
+    #control {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      text-align: right;
+      max-width: calc(100% - 250px);
+    }
+    .group {
+      background: rgba(255, 255, 255, .7);
+      padding: 2px 4px 2px 4px;
+      text-align: left;
+      display: inline-block;
+      z-index: 999;
+      position: relative;
+    }
+    #fields {
+      z-index: 999;
+      position: relative;
+    }
+    #fields label {
+      background: rgba(255, 255, 255, .7);
+      padding: 5px;
+    }
+    #dataset {
+      position: absolute;
+      top: 50px;
+      left: 10px;
+      z-index: 999;
+    }
+    #msg {
+      position: absolute;
+      margin-top: 10px;
+      bottom: 20px;
+      right: 20px;
+      z-index: 999;
+      background: rgba(255, 255, 255, .7);
+      padding: 4px;
+    }
+    h1 {
+      font-variant: small-caps;
+      opacity: 0.5;
+      font-size: 25px;
+    }
+    button {
+      height: 25px;
+      background-color: white;
+      border-radius: 1px;
+      cursor: pointer;
+    }
+    .cy-panzoom {
+      position: absolute;
+      top: 100px;
+      left: 20px;
+    }
+    .shadow {
+      box-shadow: inset 1px 1px 4px #aaa;
+      background-color: #eee;
+    }
+    body.callgraphModeHidden .callgraphMode {
+      display: none;
+    }
+    body.dataflowModeHidden .dataflowMode {
+      display: none;
+    }
+    input[type=number] {
+      width: 60px;
+      height: 30px;
+    }
+  </style>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      cytoscape.warnings(false);
+      const cy = window.cy = cytoscape({
+        container: document.getElementById('cy'),
+        layout: null,
+        wheelSensitivity: 0.3,
+        maxZoom: 3,
+        style: [
+          {
+            selector: 'node',
+            style: {
+              'min-zoomed-font-size': '3px',
+              'background-color': '#aaaaaa'
+            }
+          },
+          {
+            selector: 'node.cy-expand-collapse-collapsed-node',
+            style: {
+              'border-width': '1px',
+              'border-style': 'solid',
+              'border-color': '#000000'
+            }
+          },
+          {
+            selector: 'node.cy-expand-collapse-collapsed-node.callWeight',
+            style: {
+              'background-color': 'mapData(callWeight, 0, 100, lightgray, purple)'
+            }
+          },
+          {
+            selector: 'node.cy-expand-collapse-collapsed-node.tokenWeight',
+            style: {
+              'background-color': 'mapData(tokenWeight, 0, 100, lightgray, purple)'
+            }
+          },
+          {
+            selector: 'node[isEntry]',
+            style: {
+              'border-width': '3px',
+              'border-style': 'solid',
+              'border-color': '#000000'
+            }
+          },
+          {
+            selector: 'node:selected',
+            style: {
+              'border-width': '4px',
+              'border-style': 'solid',
+              'border-color': '#3050c0'
+            }
+          },
+          {
+            selector: 'node[isReachable].highlight',
+            style: {
+              'border-width': '2px',
+              'border-style': 'solid',
+              'border-color': '#ffff00'
+            }
+          },
+          {
+            selector: 'node:selected[isReachable].highlight',
+            style: {
+              'border-width': '4px',
+              'border-color': '#50c050'
+            }
+          },
+          {
+            selector: 'node:selected[isEntry]',
+            style: {
+              'border-width': '5px',
+            }
+          },
+          {
+            selector: 'node[isEntry].highlight',
+            style: {
+              'border-width': '5px',
+            }
+          },
+          {
+            selector: 'node[kind="package"]',
+            style: {
+              'label': 'data(name)',
+              'font-size': '10px',
+              'shape': 'rectangle'
+            }
+          },
+          {
+            selector: 'node[kind="package"].callWeight',
+            style: {
+              'width': function (node) {
+                return (30 + Math.sqrt(node.data('callWeight'))*2) + 'px';
+              },
+              'height': function (node) {
+                return (30 + Math.sqrt(node.data('callWeight'))*2) + 'px';
+              }
+            }
+          },
+          {
+            selector: 'node[kind="package"].tokenWeight',
+            style: {
+              'width': function (node) {
+                return (30 + Math.sqrt(node.data('tokenWeight'))*2) + 'px';
+              },
+              'height': function (node) {
+                return (30 + Math.sqrt(node.data('tokenWeight'))*2) + 'px';
+              }
+            }
+          },
+          {
+            selector: 'node[kind="module"]',
+            style: {
+              'label': 'data(name)',
+              'font-size': '8px',
+              'shape': 'rectangle'
+            }
+          },
+          {
+            selector: 'node[kind="module"].callWeight',
+            style: {
+              'width': function (node) {
+                return (20 + Math.sqrt(node.data('callWeight'))) + 'px';
+              },
+              'height': function (node) {
+                return (20 + Math.sqrt(node.data('callWeight'))) + 'px';
+              }
+            }
+          },
+          {
+            selector: 'node[kind="module"].tokenWeight',
+            style: {
+              'width': function (node) {
+                return (20 + Math.sqrt(node.data('tokenWeight'))) + 'px';
+              },
+              'height': function (node) {
+                return (20 + Math.sqrt(node.data('tokenWeight'))) + 'px';
+              },
+              'background-color': 'mapData(tokenWeight, 0, 100, gray, red)'
+            }
+          },
+          {
+            selector: 'node[kind="function"]',
+            style: {
+              'label': 'data(name)',
+              'font-size': '6px',
+              'shape': 'ellipse'
+            }
+          },
+          {
+            selector: 'node[kind="function"].callWeight',
+            style: {
+              'width': function (node) {
+                return (10 + node.data('callWeight')/3) + 'px';
+              },
+              'height': function (node) {
+                return (10 + node.data('callWeight')/3) + 'px';
+              },
+              'background-color': 'mapData(callWeight, 0, 100, gray, purple)'
+            }
+          },
+          {
+            selector: 'node.cy-expand-collapse-collapsed-node',
+            style: {
+              'shape': 'rectangle',
+            },
+          },
+          {
+            selector: ':parent',
+            style: {
+              'background-opacity': 0.333
+            }
+          },
+          {
+            selector: 'node[isSource]',
+            style: {
+              'background-color': '#aa0000',
+              'background-opacity': 0.8
+            }
+          },
+          {
+            selector: 'node[isTarget]',
+            style: {
+              'background-color': '#ff0000',
+              'background-opacity': 0.8
+            }
+          },
+          {
+            selector: 'node[kind="variable"]',
+            style: {
+              'shape': 'ellipse',
+              'width': '8px',
+              'height': '8px',
+              'background-color': 'gray'
+            }
+          },
+          {
+            selector: 'node[kind="variable"].tokenWeight',
+            style: {
+              'width': function (node) {
+                return (8 + Math.sqrt(node.data('tokenWeight'))/2) + 'px';
+              },
+              'height': function (node) {
+                return (8 + Math.sqrt(node.data('tokenWeight'))/2) + 'px';
+              },
+              'background-color': 'mapData(tokenWeight, 0, 100, gray, red)'
+            }
+          },
+          {
+            selector: 'edge',
+            style: {
+              'width': 1,
+              'line-color': '#888',
+              'target-arrow-color': '#888',
+              'target-arrow-shape': 'triangle',
+              'curve-style': 'bezier'
+            }
+          },
+          {
+            selector: 'edge.cy-expand-collapse-collapsed-edge',
+            style: {
+              'width': function (edge) {
+                return (2 + Math.log2(edge.data('collapsedEdges').length)/2) + 'px';
+              },
+              'curve-style': 'unbundled-bezier'
+            }
+          },
+          {
+            selector: 'edge[kind="require"]',
+            style: {
+              'line-color': '#bbb',
+              'target-arrow-color': '#bbb',
+            }
+          },
+          {
+            selector: '.hidden',
+            css: {
+              'display': 'none'
+            }
+          },
+          {
+            selector: 'edge[sourceTarget]',
+            style: {
+              'line-color': '#aa0000',
+              'target-arrow-color': '#aa0000',
+              'width': '3px'
+            }
+          },
+          {
+            selector: 'edge[kind="data"]',
+            style: {
+              'width': function (edge) {
+                return 1 + Math.log2((edge.data('weight') ?? 0) + 1);
+              }
+            }
+          }
+        ]
+      });
+      cy.panzoom({
+        panSpeed: 5,
+        panDistance: 15
+      });
+
+      cy.on("layoutstart", e => {
+        document.getElementById("layout").classList.add("shadow");
+      });
+      cy.on("layoutstop", e => {
+        document.getElementById("layout").classList.remove("shadow");
+      });
+      cy.on('select', e => {
+        document.getElementById("msg").textContent = e.target?.data()?.fullName ?? '';
+      });
+      cy.on('unselect', () => {
+        document.getElementById("msg").textContent = '';
+      });
+
+      let layout;
+      const stopLayout = () => layout?.stop();
+      function newLayout(fit = false) {
+        layout = cy.layout({
+          name: 'cola',
+          padding: 20,
+          animate: true,
+          randomize: false,
+          fit,
+          centerGraph: false,
+          avoidOverlap: true,
+          maxSimulationTime: 3000,
+        });
+
+        // layout = cy.layout({
+        //   name: 'fcose',
+        //   quality: "proof",
+        //   padding: 20,
+        //   animate: true,
+        //   randomize: false,
+        //   fit,
+        //   nodeDimensionsIncludeLabels: true,
+        // });
+        layout.start();
+      }
+
+      let removed;
+      function hide() {
+        stopLayout();
+        if (removed) {
+          removed.filter("node").restore();
+          removed.filter("edge").forEach(e => {
+            if (e.source().inside() && e.target().inside())
+              e.restore();
+          });
+          removed = removed.filter(":removed");
+        }
+        const threshold = document.getElementById("threshold").value;
+        const count = graph.kind === "callgraph" ? "callCount" : graph.kind === "dataflow" ? "tokenCount" : undefined;
+        const queries = [];
+        if (count && threshold > 0)
+          queries.push(`node[${count} < ${threshold}]`);
+        if (document.getElementById("hideUnreachable").checked)
+          queries.push("node[!isReachable]");
+        if (queries.length > 0) {
+          const nodes = cy.elements(queries.join(","));
+          ec.expandAllEdges();
+          ec.collapseRecursively(nodes);
+          ec.collapseAllEdges();
+          const r = nodes.remove();
+          removed = removed ? removed.union(r) : r;
+        }
+      }
+
+      const ec = cy.expandCollapse({
+        fisheye: false,
+        randomize: false,
+        animate: true,
+        undoable: false,
+        cueEnabled: false,
+        allowNestedEdgeCollapse: false,
+        groupEdgesOfSameTypeOnCollapse: true
+      });
+      cy.on("expandcollapse.afterexpand", node => {
+        cy.batch(() => {
+          const desc = cy.nodes(node.target).descendants();
+          if (document.getElementById("showCallDensity").checked)
+            desc.addClass("callWeight");
+          else
+            desc.removeClass("callWeight");
+          if (document.getElementById("showValueDensity").checked)
+            desc.addClass("tokenWeight");
+          else
+            desc.removeClass("tokenWeight");
+          if (document.getElementById("highlightReachable").checked)
+            desc.addClass("highlight");
+          else
+            desc.removeClass("highlight");
+        });
+      });
+
+      document.getElementById("collapseAll").addEventListener("click", () => {
+        stopLayout();
+        ec.expandAllEdges();
+        ec.collapseAll();
+        ec.collapseAllEdges();
+        showVulnerabilities();
+        newLayout();
+      });
+      document.getElementById("collapseSelected").addEventListener("click", () => {
+        stopLayout();
+        const ns = cy.$(":selected:compound:visible");
+        if (ns.size() > 0) {
+          ec.expandAllEdges();
+          ec.collapseRecursively(ns);
+          ec.collapseAllEdges();
+          showVulnerabilities();
+          newLayout();
+        }
+      });
+      document.getElementById("expandSelected").addEventListener("click", () => {
+        stopLayout();
+        const es = cy.$(":selected:visible.cy-expand-collapse-collapsed-node,:selected:visible:compound");
+        if (es.size() > 0) {
+          ec.expandAllEdges();
+          ec.expand(es.union(es.children(":visible")));
+          ec.collapseAllEdges();
+          showVulnerabilities();
+          hide();
+          newLayout();
+        }
+      });
+      document.getElementById("expandAllPackages").addEventListener("click", () => {
+        stopLayout();
+        ec.expandAllEdges();
+        ec.expand(cy.$('node[kind="package"]:visible.cy-expand-collapse-collapsed-node'));
+        ec.collapseAllEdges();
+        showVulnerabilities();
+        hide();
+        newLayout();
+      });
+      document.getElementById("expandAll").addEventListener("click", () => {
+        stopLayout();
+        ec.expandAllEdges();
+        ec.expandRecursively(cy.nodes(":visible"));
+        hide();
+        newLayout();
+      });
+      document.getElementById("showPredecessors").addEventListener("click", () => {
+        const es = cy.$("node:selected");
+        if (es.size() > 0) {
+          stopLayout();
+          const collapsed = cy.$("node.cy-expand-collapse-collapsed-node");
+          ec.expandAllEdges();
+          ec.expandAll();
+          const sources = es.union(es.descendants());
+          const pred = sources.predecessors().union(sources);
+          const keep = pred.union(pred.ancestors())
+          cy.nodes().difference(keep).remove();
+          ec.collapseRecursively(collapsed.intersection(keep));
+          ec.collapseAllEdges();
+          hide();
+          newLayout();
+        }
+      });
+      document.getElementById("removeSelected").addEventListener("click", () => {
+        const es = cy.$(":selected");
+        if (es.size() > 0) {
+          stopLayout();
+          ec.expandAllEdges();
+          cy.$(":selected").remove();
+          ec.collapseAllEdges();
+          hide();
+          newLayout();
+        }
+      });
+      document.getElementById("removeNonSelected").addEventListener("click", () => {
+        const es = cy.$(":selected");
+        if (es.size() > 0) {
+          stopLayout();
+          ec.expandAllEdges();
+          cy.nodes().difference(es.union(es.descendants()).union(es.ancestors())).remove();
+          ec.collapseAllEdges();
+          removed = undefined;
+          hide();
+          newLayout();
+        }
+      });
+      document.getElementById("layout").addEventListener("click", () => {
+        stopLayout();
+        if (!document.getElementById("layout").classList.contains("shadow"))
+          newLayout();
+      });
+      document.getElementById("hideUnreachable").addEventListener("change", () => {
+        stopLayout();
+        hide();
+        newLayout();
+      });
+      document.getElementById("threshold").addEventListener("change", () => {
+        stopLayout();
+        hide();
+        newLayout();
+      });
+      document.getElementById("threshold").addEventListener("focus", e => {
+        e.target.select();
+      });
+      document.getElementById("highlightReachable").addEventListener("change", () => {
+        stopLayout();
+        if (document.getElementById("highlightReachable").checked)
+          cy.nodes().addClass("highlight");
+        else
+          cy.nodes().removeClass("highlight");
+        newLayout();
+      });
+      document.getElementById("showCallDensity").addEventListener("change", () => {
+        stopLayout();
+        if (document.getElementById("showCallDensity").checked)
+          cy.nodes().addClass("callWeight");
+        else
+          cy.nodes().removeClass("callWeight");
+        newLayout();
+      });
+      document.getElementById("showValueDensity").addEventListener("change", () => {
+        stopLayout();
+        if (document.getElementById("showValueDensity").checked)
+          cy.nodes().addClass("tokenWeight");
+        else
+          cy.nodes().removeClass("tokenWeight");
+        newLayout();
+      });
+
+      const data = {"graphs":[{"kind":"callgraph","elements":[{"data":{"id":1,"kind":"package","name":"dino","fullName":"dino@0.0","callWeight":100,"callCount":311,"isEntry":"true","isReachable":"true"}},{"data":{"id":2,"kind":"module","parent":1,"name":"constants.js","fullName":"dino@0.0:constants.js","callWeight":1,"callCount":2,"isEntry":"true","isReachable":"true"}},{"data":{"id":3,"kind":"module","parent":1,"name":"error_page_controller_ios.js","fullName":"dino@0.0:error_page_controller_ios.js","callWeight":0,"callCount":0,"isEntry":"true","isReachable":"true"}},{"data":{"id":4,"kind":"function","parent":3,"name":"<anon> 7:24:7:37","fullName":"'function() {}'dino@0.0:error_page_controller_ios.js:7:24:<anonymous>","callWeight":0,"callCount":0}},{"data":{"id":5,"kind":"function","parent":3,"name":"<anon> 10:22:12:4","fullName":"'function(url) { window.location = url; }'dino@0.0:error_page_controller_ios.js:10:22:<anonymous>","callWeight":0,"callCount":0}},{"data":{"id":6,"kind":"function","parent":3,"name":"<anon> 15:23:15:36","fullName":"'function() {}'dino@0.0:error_page_controller_ios.js:15:23:<anonymous>","callWeight":0,"callCount":0}},{"data":{"id":7,"kind":"function","parent":3,"name":"<anon> 18:30:18:43","fullName":"'function() {}'dino@0.0:error_page_controller_ios.js:18:30:<anonymous>","callWeight":0,"callCount":0}},{"data":{"id":8,"kind":"function","parent":3,"name":"<anon> 21:22:21:35","fullName":"'function() {}'dino@0.0:error_page_controller_ios.js:21:22:<anonymous>","callWeight":0,"callCount":0}},{"data":{"id":9,"kind":"function","parent":3,"name":"<anon> 22:21:22:34","fullName":"'function() {}'dino@0.0:error_page_controller_ios.js:22:21:<anonymous>","callWeight":0,"callCount":0}},{"data":{"id":10,"kind":"function","parent":3,"name":"<anon> 23:19:23:32","fullName":"'function() {}'dino@0.0:error_page_controller_ios.js:23:19:<anonymous>","callWeight":0,"callCount":0}},{"data":{"id":11,"kind":"function","parent":3,"name":"<anon> 24:25:24:38","fullName":"'function() {}'dino@0.0:error_page_controller_ios.js:24:25:<anonymous>","callWeight":0,"callCount":0}},{"data":{"id":12,"kind":"function","parent":3,"name":"<anon> 27:19:30:4","fullName":"'function() { window....$trackEasterEgg'}); }'dino@0.0:error_page_controller_ios.js:27:19:<anonymous>","callWeight":0,"callCount":0}},{"data":{"id":13,"kind":"function","parent":3,"name":"<anon> 32:29:37:4","fullName":"'function(highScore) ...$re.toString(), }); }'dino@0.0:error_page_controller_ios.js:32:29:<anonymous>","callWeight":0,"callCount":0}},{"data":{"id":14,"kind":"function","parent":3,"name":"<anon> 39:28:42:4","fullName":"'function() { window....$erEggHighScore'}); }'dino@0.0:error_page_controller_ios.js:39:28:<anonymous>","callWeight":0,"callCount":0}},{"data":{"id":15,"kind":"function","parent":3,"name":"<anon> 49:64:52:2","fullName":"'function( highscore)...$ghScore(highscore);}'dino@0.0:error_page_controller_ios.js:49:64:<anonymous>","callWeight":0,"callCount":0}},{"data":{"id":16,"kind":"module","parent":1,"name":"neterror.js","fullName":"dino@0.0:neterror.js","callWeight":3,"callCount":9,"isEntry":"true","isReachable":"true"}},{"data":{"id":17,"kind":"function","parent":16,"name":"decodeUTF16Base64ToString 33:1:41:2","fullName":"'function decodeUTF16...$); } return result;}'dino@0.0:neterror.js:33:1:decodeUTF16Base64ToString","callWeight":11,"callCount":1}},{"data":{"id":18,"kind":"function","parent":16,"name":"toggleHelpBox 43:1:63:2","fullName":"'function toggleHelpB...$(HIDDEN_CLASS); } }}'dino@0.0:neterror.js:43:1:toggleHelpBox","callWeight":0,"callCount":0}},{"data":{"id":19,"kind":"function","parent":16,"name":"diagnoseErrors 65:1:69:2","fullName":"'function diagnoseErr...$orsButtonClick(); }}'dino@0.0:neterror.js:65:1:diagnoseErrors","callWeight":0,"callCount":0}},{"data":{"id":20,"kind":"function","parent":16,"name":"portalSignin 71:1:75:2","fullName":"'function portalSigni...$ninButtonClick(); }}'dino@0.0:neterror.js:71:1:portalSignin","callWeight":0,"callCount":0}},{"data":{"id":21,"kind":"function","parent":16,"name":"updateForDnsProbe 88:1:92:2","fullName":"'function updateForDn...$mentLoadOrUpdate();}'dino@0.0:neterror.js:88:1:updateForDnsProbe","callWeight":0,"callCount":0}},{"data":{"id":22,"kind":"function","parent":16,"name":"updateIconClass 95:1:104:2","fullName":"'function updateIconC...$'icon ' + newClass;}'dino@0.0:neterror.js:95:1:updateIconClass","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":23,"kind":"function","parent":16,"name":"reloadButtonClick 108:1:120:2","fullName":"'function reloadButto...$w.location = url; }}'dino@0.0:neterror.js:108:1:reloadButtonClick","callWeight":0,"callCount":0}},{"data":{"id":24,"kind":"function","parent":16,"name":"downloadButtonClick 122:1:135:2","fullName":"'function downloadBut...$ve(HIDDEN_CLASS); }}'dino@0.0:neterror.js:122:1:downloadButtonClick","callWeight":0,"callCount":0}},{"data":{"id":25,"kind":"function","parent":16,"name":"detailsButtonClick 137:1:141:2","fullName":"'function detailsButt...$ilsButtonClick(); }}'dino@0.0:neterror.js:137:1:detailsButtonClick","callWeight":0,"callCount":0}},{"data":{"id":26,"kind":"function","parent":16,"name":"setAutoFetchState 150:1:155:2","fullName":"'function setAutoFetc...$ || !can_schedule);}'dino@0.0:neterror.js:150:1:setAutoFetchState","callWeight":11,"callCount":1}},{"data":{"id":27,"kind":"function","parent":16,"name":"savePageLaterClick 157:1:161:2","fullName":"'function savePageLat...$en // it completes.}'dino@0.0:neterror.js:157:1:savePageLaterClick","callWeight":0,"callCount":0}},{"data":{"id":28,"kind":"function","parent":16,"name":"cancelSavePageClick 163:1:168:2","fullName":"'function cancelSaveP...$State(false, true);}'dino@0.0:neterror.js:163:1:cancelSavePageClick","callWeight":0,"callCount":0}},{"data":{"id":29,"kind":"function","parent":16,"name":"toggleErrorInformationPopup 170:1:173:2","fullName":"'function toggleError...$ggle(HIDDEN_CLASS);}'dino@0.0:neterror.js:170:1:toggleErrorInformationPopup","callWeight":0,"callCount":0}},{"data":{"id":30,"kind":"function","parent":16,"name":"launchOfflineItem 175:1:177:2","fullName":"'function launchOffli...$temID, name_space);}'dino@0.0:neterror.js:175:1:launchOfflineItem","callWeight":0,"callCount":0}},{"data":{"id":31,"kind":"function","parent":16,"name":"launchDownloadsPage 179:1:181:2","fullName":"'function launchDownl...$nchDownloadsPage();}'dino@0.0:neterror.js:179:1:launchDownloadsPage","callWeight":0,"callCount":0}},{"data":{"id":32,"kind":"function","parent":16,"name":"getIconForSuggestedItem 183:1:196:2","fullName":"'function getIconForS...$eturn 'image-file';}'dino@0.0:neterror.js:183:1:getIconForSuggestedItem","callWeight":11,"callCount":1}},{"data":{"id":33,"kind":"function","parent":16,"name":"getSuggestedContentDiv 198:1:254:2","fullName":"'function getSuggeste...$il} </div> </div>`;}'dino@0.0:neterror.js:198:1:getSuggestedContentDiv","callWeight":11,"callCount":1}},{"data":{"id":34,"kind":"function","parent":16,"name":"offlineContentAvailable 278:1:311:2","fullName":"'function offlineCont...$isibility(false); }}'dino@0.0:neterror.js:278:1:offlineContentAvailable","callWeight":0,"callCount":0}},{"data":{"id":35,"kind":"function","parent":16,"name":"toggleOfflineContentListVisibility 313:1:324:2","fullName":"'function toggleOffli...$anged(isVisible); }}'dino@0.0:neterror.js:313:1:toggleOfflineContentListVisibility","callWeight":11,"callCount":1}},{"data":{"id":36,"kind":"function","parent":16,"name":"onDocumentLoadOrUpdate 327:1:376:2","fullName":"'function onDocumentL...$titial-wrapper'); }}'dino@0.0:neterror.js:327:1:onDocumentLoadOrUpdate","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":37,"kind":"function","parent":16,"name":"onDocumentLoad 378:1:392:2","fullName":"'function onDocumentL...$mentLoadOrUpdate();}'dino@0.0:neterror.js:378:1:onDocumentLoad","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":38,"kind":"module","parent":1,"name":"offline-sprite-definitions.js","fullName":"dino@0.0:offline-sprite-definitions.js","callWeight":2,"callCount":6,"isEntry":"true","isReachable":"true"}},{"data":{"id":39,"kind":"function","parent":38,"name":"CollisionBox 20:8:25:2","fullName":"'function CollisionBo...$w; this.height = h;}'dino@0.0:offline-sprite-definitions.js:20:8:CollisionBox","callWeight":56,"callCount":5,"isReachable":"true"}},{"data":{"id":40,"kind":"module","parent":1,"name":"offline.js","fullName":"dino@0.0:offline.js","callWeight":100,"callCount":294,"isEntry":"true","isReachable":"true"}},{"data":{"id":41,"kind":"function","parent":40,"name":"Runner 18:8:103:2","fullName":"'function Runner(oute...$Score.bind(this); }}'dino@0.0:offline.js:18:8:Runner","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":42,"kind":"function","parent":40,"name":"initAltGameType 273:3:279:4","fullName":"'initAltGameType() { ...$, 10) - 1] : ''; } }'dino@0.0:offline.js:273:3:initAltGameType","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":43,"kind":"function","parent":40,"name":"isDisabled 285:3:287:4","fullName":"'isDisabled() { retur...$sabledEasterEgg'); }'dino@0.0:offline.js:285:3:isDisabled","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":44,"kind":"function","parent":40,"name":"setupDisabledRunner 292:3:305:4","fullName":"'setupDisabledRunner(...$; } }.bind(this)); }'dino@0.0:offline.js:292:3:setupDisabledRunner","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":45,"kind":"function","parent":44,"name":"<anon> 299:54:304:6","fullName":"'function(e) { if (Ru...$icon-disabled'); } }'dino@0.0:offline.js:299:54:<anonymous>","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":46,"kind":"function","parent":40,"name":"updateConfigSetting 312:3:330:4","fullName":"'updateConfigSetting(...$alue)); break; } } }'dino@0.0:offline.js:312:3:updateConfigSetting","callWeight":0,"callCount":0}},{"data":{"id":47,"kind":"function","parent":40,"name":"createImageElement 337:3:351:4","fullName":"'createImageElement(r...$el; } return null; }'dino@0.0:offline.js:337:3:createImageElement","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":48,"kind":"function","parent":40,"name":"loadImages 357:3:389:4","fullName":"'loadImages() { let s...$nit.bind(this)); } }'dino@0.0:offline.js:357:3:loadImages","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":49,"kind":"function","parent":48,"name":"<anon> 378:37:378:48","fullName":"'() => false'dino@0.0:offline.js:378:37:<anonymous>","callWeight":44,"callCount":4,"isReachable":"true"}},{"data":{"id":50,"kind":"function","parent":40,"name":"loadSounds 394:3:413:4","fullName":"'loadSounds() { if (!...$this, sound)); } } }'dino@0.0:offline.js:394:3:loadSounds","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":51,"kind":"function","parent":50,"name":"<anon> 408:51:410:12","fullName":"'function(index, audi...$ndex] = audioData; }'dino@0.0:offline.js:408:51:<anonymous>","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":52,"kind":"function","parent":40,"name":"setSpeed 419:3:431:4","fullName":"'setSpeed(opt_speed) ...$eed = opt_speed; } }'dino@0.0:offline.js:419:3:setSpeed","callWeight":33,"callCount":3,"isReachable":"true"}},{"data":{"id":53,"kind":"function","parent":40,"name":"init 436:3:525:4","fullName":"'init() { // Hide the...$e = e.matches; }); }'dino@0.0:offline.js:436:3:init","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":54,"kind":"function","parent":53,"name":"<anon> 522:36:524:6","fullName":"'(e) => { this.isDarkMode = e.matches; }'dino@0.0:offline.js:522:36:<anonymous>","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":55,"kind":"function","parent":40,"name":"createTouchController 530:3:536:4","fullName":"'createTouchControlle...$.touchController); }'dino@0.0:offline.js:530:3:createTouchController","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":56,"kind":"function","parent":40,"name":"debounceResize 541:3:546:4","fullName":"'debounceResize() { i...$ind(this), 250); } }'dino@0.0:offline.js:541:3:debounceResize","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":57,"kind":"function","parent":40,"name":"adjustDimensions 551:3:595:4","fullName":"'adjustDimensions() {...$e, this.tRex); } } }'dino@0.0:offline.js:551:3:adjustDimensions","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":58,"kind":"function","parent":40,"name":"playIntro 601:3:624:4","fullName":"'playIntro() { if (!t...$ this.restart(); } }'dino@0.0:offline.js:601:3:playIntro","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":59,"kind":"function","parent":40,"name":"startGame 630:3:656:4","fullName":"'startGame() { if (th...$hange.bind(this)); }'dino@0.0:offline.js:630:3:startGame","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":60,"kind":"function","parent":40,"name":"clearCanvas 658:3:661:4","fullName":"'clearCanvas() { this...$imensions.HEIGHT); }'dino@0.0:offline.js:658:3:clearCanvas","callWeight":33,"callCount":3,"isReachable":"true"}},{"data":{"id":61,"kind":"function","parent":40,"name":"isCanvasInView 668:3:671:4","fullName":"'isCanvasInView() { r...$AS_IN_VIEW_OFFSET; }'dino@0.0:offline.js:668:3:isCanvasInView","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":62,"kind":"function","parent":40,"name":"enableAltGameMode 676:3:690:4","fullName":"'enableAltGameMode() ...$ndFx.background(); }'dino@0.0:offline.js:676:3:enableAltGameMode","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":63,"kind":"function","parent":40,"name":"update 695:3:831:4","fullName":"'update() { this.upda...$uleNextUpdate(); } }'dino@0.0:offline.js:695:3:update","callWeight":56,"callCount":5,"isReachable":"true"}},{"data":{"id":64,"kind":"function","parent":40,"name":"handleEvent 837:3:855:4","fullName":"'handleEvent(e) { ret...$e, Runner.events); }'dino@0.0:offline.js:837:3:handleEvent","callWeight":0,"callCount":0}},{"data":{"id":65,"kind":"function","parent":64,"name":"<anon> 838:13:854:6","fullName":"'function(evtType, ev...$ected(e); break; } }'dino@0.0:offline.js:838:13:<anonymous>","callWeight":11,"callCount":1}},{"data":{"id":66,"kind":"function","parent":40,"name":"handleCanvasKeyPress 861:3:871:4","fullName":"'handleCanvasKeyPress...$is.onKeyDown(e); } }'dino@0.0:offline.js:861:3:handleCanvasKeyPress","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":67,"kind":"function","parent":40,"name":"preventScrolling 877:3:881:4","fullName":"'preventScrolling(e) ...$reventDefault(); } }'dino@0.0:offline.js:877:3:preventScrolling","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":68,"kind":"function","parent":40,"name":"toggleSpeed 886:3:904:4","fullName":"'toggleSpeed() { if (...$dToggle(true); } } }'dino@0.0:offline.js:886:3:toggleSpeed","callWeight":33,"callCount":3,"isReachable":"true"}},{"data":{"id":69,"kind":"function","parent":40,"name":"showSpeedToggle 911:3:917:4","fullName":"'showSpeedToggle(e) {...$ !this.crashed); } }'dino@0.0:offline.js:911:3:showSpeedToggle","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":70,"kind":"function","parent":40,"name":"disableSpeedToggle 923:3:929:4","fullName":"'disableSpeedToggle(d...$ute('disabled'); } }'dino@0.0:offline.js:923:3:disableSpeedToggle","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":71,"kind":"function","parent":40,"name":"startListening 934:3:960:4","fullName":"'startListening() { /...$ONNECTED, this); } }'dino@0.0:offline.js:934:3:startListening","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":72,"kind":"function","parent":40,"name":"stopListening 965:3:981:4","fullName":"'stopListening() { do...$ONNECTED, this); } }'dino@0.0:offline.js:965:3:stopListening","callWeight":0,"callCount":0}},{"data":{"id":73,"kind":"function","parent":40,"name":"onKeyDown 987:3:1049:4","fullName":"'onKeyDown(e) { // Pr...$uck(true); } } } } }'dino@0.0:offline.js:987:3:onKeyDown","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":74,"kind":"function","parent":40,"name":"onKeyUp 1055:3:1080:4","fullName":"'onKeyUp(e) { const k...$(); this.play(); } }'dino@0.0:offline.js:1055:3:onKeyUp","callWeight":11,"callCount":1}},{"data":{"id":75,"kind":"function","parent":40,"name":"onGamepadConnected 1086:3:1090:4","fullName":"'onGamepadConnected(e...$lGamepadState(); } }'dino@0.0:offline.js:1086:3:onGamepadConnected","callWeight":11,"callCount":1}},{"data":{"id":76,"kind":"function","parent":40,"name":"pollGamepadState 1095:3:1101:4","fullName":"'pollGamepadState() {...$State.bind(this)); }'dino@0.0:offline.js:1095:3:pollGamepadState","callWeight":22,"callCount":2}},{"data":{"id":77,"kind":"function","parent":40,"name":"pollForActiveGamepad 1108:3:1117:4","fullName":"'pollForActiveGamepad...$pads); return; } } }'dino@0.0:offline.js:1108:3:pollForActiveGamepad","callWeight":11,"callCount":1}},{"data":{"id":78,"kind":"function","parent":40,"name":"pollActiveGamepad 1124:3:1148:4","fullName":"'pollActiveGamepad(ga...$Gamepad = gamepad; }'dino@0.0:offline.js:1124:3:pollActiveGamepad","callWeight":22,"callCount":2}},{"data":{"id":79,"kind":"function","parent":40,"name":"pollGamepadButton 1156:3:1169:4","fullName":"'pollGamepadButton(ga...$ispatchEvent(e); } }'dino@0.0:offline.js:1156:3:pollGamepadButton","callWeight":11,"callCount":1}},{"data":{"id":80,"kind":"function","parent":40,"name":"handleGameOverClicks 1176:3:1193:4","fullName":"'handleGameOverClicks...$his.restart(); } } }'dino@0.0:offline.js:1176:3:handleGameOverClicks","callWeight":11,"callCount":1}},{"data":{"id":81,"kind":"function","parent":40,"name":"isLeftClickOnCanvas 1201:3:1206:4","fullName":"'isLeftClickOnCanvas(...$his.containerEl)); }'dino@0.0:offline.js:1201:3:isLeftClickOnCanvas","callWeight":11,"callCount":1}},{"data":{"id":82,"kind":"function","parent":40,"name":"scheduleNextUpdate 1211:3:1216:4","fullName":"'scheduleNextUpdate()...$ate.bind(this)); } }'dino@0.0:offline.js:1211:3:scheduleNextUpdate","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":83,"kind":"function","parent":40,"name":"isRunning 1222:3:1224:4","fullName":"'isRunning() { return !!this.raqId; }'dino@0.0:offline.js:1222:3:isRunning","callWeight":11,"callCount":1}},{"data":{"id":84,"kind":"function","parent":40,"name":"initializeHighScore 1230:3:1241:4","fullName":"'initializeHighScore(...$his.highestScore); }'dino@0.0:offline.js:1230:3:initializeHighScore","callWeight":0,"callCount":0}},{"data":{"id":85,"kind":"function","parent":40,"name":"saveHighScore 1248:3:1260:4","fullName":"'saveHighScore(distan...$highestScore); } } }'dino@0.0:offline.js:1248:3:saveHighScore","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":86,"kind":"function","parent":40,"name":"gameOver 1265:3:1324:4","fullName":"'gameOver() { this.pl...$peedToggle(false); }'dino@0.0:offline.js:1265:3:gameOver","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":87,"kind":"function","parent":40,"name":"stop 1326:3:1332:4","fullName":"'stop() { this.setPla...$SoundFx.stopAll(); }'dino@0.0:offline.js:1326:3:stop","callWeight":33,"callCount":3,"isReachable":"true"}},{"data":{"id":88,"kind":"function","parent":40,"name":"play 1334:3:1343:4","fullName":"'play() { if (!this.c...$Fx.background(); } }'dino@0.0:offline.js:1334:3:play","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":89,"kind":"function","parent":40,"name":"restart 1345:3:1370:4","fullName":"'restart() { if (!thi...$RINGS.started)); } }'dino@0.0:offline.js:1345:3:restart","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":90,"kind":"function","parent":40,"name":"setPlayStatus 1372:3:1377:4","fullName":"'setPlayStatus(isPlay...$aying = isPlaying; }'dino@0.0:offline.js:1372:3:setPlayStatus","callWeight":56,"callCount":5,"isReachable":"true"}},{"data":{"id":91,"kind":"function","parent":40,"name":"isArcadeMode 1383:3:1388:4","fullName":"'isArcadeMode() { // ...$= ARCADE_MODE_URL; }'dino@0.0:offline.js:1383:3:isArcadeMode","callWeight":44,"callCount":4,"isReachable":"true"}},{"data":{"id":92,"kind":"function","parent":40,"name":"setArcadeMode 1393:3:1396:4","fullName":"'setArcadeMode() { do...$eContainerScale(); }'dino@0.0:offline.js:1393:3:setArcadeMode","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":93,"kind":"function","parent":40,"name":"setArcadeModeContainerScale 1401:3:1417:4","fullName":"'setArcadeModeContain...$ranslateY + 'px)'; }'dino@0.0:offline.js:1401:3:setArcadeModeContainerScale","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":94,"kind":"function","parent":40,"name":"onVisibilityChange 1422:3:1430:4","fullName":"'onVisibilityChange(e...$(); this.play(); } }'dino@0.0:offline.js:1422:3:onVisibilityChange","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":95,"kind":"function","parent":40,"name":"playSound 1436:3:1443:4","fullName":"'playSound(soundBuffe...$ceNode.start(0); } }'dino@0.0:offline.js:1436:3:playSound","callWeight":44,"callCount":4,"isReachable":"true"}},{"data":{"id":96,"kind":"function","parent":40,"name":"invert 1449:3:1461:4","fullName":"'invert(reset) { cons...$.invertTrigger); } }'dino@0.0:offline.js:1449:3:invert","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":97,"kind":"function","parent":40,"name":"<anon> 1478:30:1511:2","fullName":"'function(canvas, opt...$x'; } return false;}'dino@0.0:offline.js:1478:30:<anonymous>","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":98,"kind":"function","parent":40,"name":"<anon> 1518:31:1520:2","fullName":"'function() { return ...$nableAltGameMode');}'dino@0.0:offline.js:1518:31:<anonymous>","callWeight":44,"callCount":4,"isReachable":"true"}},{"data":{"id":99,"kind":"function","parent":40,"name":"GeneratedSoundFx 1527:1:1531:2","fullName":"'function GeneratedSo...$this.panner = null;}'dino@0.0:offline.js:1527:1:GeneratedSoundFx","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":100,"kind":"function","parent":40,"name":"init 1534:3:1552:4","fullName":"'init() { this.audioC...$Panner() : null; } }'dino@0.0:offline.js:1534:3:init","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":101,"kind":"function","parent":100,"name":"<anon> 1541:39:1545:39","fullName":"'function() { if (thi...$ontext.resume(); } }'dino@0.0:offline.js:1541:39:<anonymous>","callWeight":0,"callCount":0}},{"data":{"id":102,"kind":"function","parent":40,"name":"stopAll 1554:3:1556:4","fullName":"'stopAll() { this.cancelFootSteps(); }'dino@0.0:offline.js:1554:3:stopAll","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":103,"kind":"function","parent":40,"name":"playNote 1566:3:1602:4","fullName":"'playNote(frequency, ...$tTime + duration); }'dino@0.0:offline.js:1566:3:playNote","callWeight":56,"callCount":5,"isReachable":"true"}},{"data":{"id":104,"kind":"function","parent":40,"name":"background 1604:3:1611:4","fullName":"'background() { if (t...$loopFootSteps(); } }'dino@0.0:offline.js:1604:3:background","callWeight":44,"callCount":4,"isReachable":"true"}},{"data":{"id":105,"kind":"function","parent":40,"name":"loopFootSteps 1613:3:1620:4","fullName":"'loopFootSteps() { if...$ind(this), 280); } }'dino@0.0:offline.js:1613:3:loopFootSteps","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":106,"kind":"function","parent":105,"name":"<anon> 1615:44:1618:8","fullName":"'function() { this.pl...$116, 0.116, 0.16); }'dino@0.0:offline.js:1615:44:<anonymous>","callWeight":0,"callCount":0}},{"data":{"id":107,"kind":"function","parent":40,"name":"cancelFootSteps 1622:3:1629:4","fullName":"'cancelFootSteps() { ...$6, 0.232, 0.02); } }'dino@0.0:offline.js:1622:3:cancelFootSteps","callWeight":33,"callCount":3,"isReachable":"true"}},{"data":{"id":108,"kind":"function","parent":40,"name":"collect 1631:3:1638:4","fullName":"'collect() { if (this...$+ 0.116, 0.232); } }'dino@0.0:offline.js:1631:3:collect","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":109,"kind":"function","parent":40,"name":"jump 1640:3:1646:4","fullName":"'jump() { if (this.au...$232, 0.3, -0.6); } }'dino@0.0:offline.js:1640:3:jump","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":110,"kind":"function","parent":40,"name":"speakPhrase 1654:1:1661:2","fullName":"'function speakPhrase...$hesis.speak(msg); }}'dino@0.0:offline.js:1654:1:speakPhrase","callWeight":0,"callCount":0}},{"data":{"id":111,"kind":"function","parent":40,"name":"announcePhrase 1668:1:1673:2","fullName":"'function announcePhr...$Content = phrase; }}'dino@0.0:offline.js:1668:1:announcePhrase","callWeight":44,"callCount":4,"isReachable":"true"}},{"data":{"id":112,"kind":"function","parent":40,"name":"getA11yString 1681:1:1685:2","fullName":"'function getA11yStri...$g(stringName) : '';}'dino@0.0:offline.js:1681:1:getA11yString","callWeight":44,"callCount":4,"isReachable":"true"}},{"data":{"id":113,"kind":"function","parent":40,"name":"getRandomNum 1693:1:1695:2","fullName":"'function getRandomNu...$ - min + 1)) + min;}'dino@0.0:offline.js:1693:1:getRandomNum","callWeight":100,"callCount":9,"isReachable":"true"}},{"data":{"id":114,"kind":"function","parent":40,"name":"vibrate 1702:1:1706:2","fullName":"'function vibrate(dur...$ibrate(duration); }}'dino@0.0:offline.js:1702:1:vibrate","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":115,"kind":"function","parent":40,"name":"createCanvas 1717:1:1727:2","fullName":"'function createCanva...$as); return canvas;}'dino@0.0:offline.js:1717:1:createCanvas","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":116,"kind":"function","parent":40,"name":"decodeBase64ToArrayBuffer 1734:1:1744:2","fullName":"'function decodeBase6...$eturn bytes.buffer;}'dino@0.0:offline.js:1734:1:decodeBase64ToArrayBuffer","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":117,"kind":"function","parent":40,"name":"getTimeStamp 1751:1:1753:2","fullName":"'function getTimeStam...$ performance.now();}'dino@0.0:offline.js:1751:1:getTimeStamp","callWeight":89,"callCount":8,"isReachable":"true"}},{"data":{"id":118,"kind":"function","parent":40,"name":"GameOverPanel 1769:1:1791:2","fullName":"'function GameOverPan...$riginalText = true;}'dino@0.0:offline.js:1769:1:GameOverPanel","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":119,"kind":"function","parent":40,"name":"updateDimensions 1825:3:1831:4","fullName":"'updateDimensions(wid...$frames.length - 1; }'dino@0.0:offline.js:1825:3:updateDimensions","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":120,"kind":"function","parent":40,"name":"drawGameOverText 1833:3:1874:4","fullName":"'drawGameOverText(dim...$nvasCtx.restore(); }'dino@0.0:offline.js:1833:3:drawGameOverText","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":121,"kind":"function","parent":40,"name":"drawAltGameElements 1879:3:1900:4","fullName":"'drawAltGameElements(...$dConfig.HEIGHT); } }'dino@0.0:offline.js:1879:3:drawAltGameElements","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":122,"kind":"function","parent":40,"name":"drawRestartButton 1905:3:1933:4","fullName":"'drawRestartButton() ...$nvasCtx.restore(); }'dino@0.0:offline.js:1905:3:drawRestartButton","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":123,"kind":"function","parent":40,"name":"draw 1941:3:1950:4","fullName":"'draw(opt_altGameMode...$x); this.update(); }'dino@0.0:offline.js:1941:3:draw","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":124,"kind":"function","parent":40,"name":"update 1955:3:2013:4","fullName":"'update() { const now...$pdate.bind(this)); }'dino@0.0:offline.js:1955:3:update","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":125,"kind":"function","parent":40,"name":"clearGameOverTextBounds 2019:3:2028:4","fullName":"'clearGameOverTextBou...$nvasCtx.restore(); }'dino@0.0:offline.js:2019:3:clearGameOverTextBounds","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":126,"kind":"function","parent":40,"name":"reset 2030:3:2041:4","fullName":"'reset() { if (this.g...$iginalText = true; }'dino@0.0:offline.js:2030:3:reset","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":127,"kind":"function","parent":40,"name":"checkForCollision 2055:1:2110:2","fullName":"'function checkForCol...$stacleBox]; } } } }}'dino@0.0:offline.js:2055:1:checkForCollision","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":128,"kind":"function","parent":40,"name":"createAdjustedCollisionBox 2119:1:2125:2","fullName":"'function createAdjus...$width, box.height);}'dino@0.0:offline.js:2119:1:createAdjustedCollisionBox","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":129,"kind":"function","parent":40,"name":"drawCollisionBoxes 2131:1:2140:2","fullName":"'function drawCollisi...$anvasCtx.restore();}'dino@0.0:offline.js:2131:1:drawCollisionBoxes","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":130,"kind":"function","parent":40,"name":"boxCompare 2149:1:2166:2","fullName":"'function boxCompare(...$; } return crashed;}'dino@0.0:offline.js:2149:1:boxCompare","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":131,"kind":"function","parent":40,"name":"Obstacle 2183:1:2209:2","fullName":"'function Obstacle( c...$; this.init(speed);}'dino@0.0:offline.js:2183:1:Obstacle","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":132,"kind":"function","parent":40,"name":"init 2227:3:2274:4","fullName":"'init(speed) { this.c...${ this.gap *= 2; } }'dino@0.0:offline.js:2227:3:init","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":133,"kind":"function","parent":40,"name":"draw 2279:3:2301:4","fullName":"'draw() { let sourceW...$ypeConfig.height); }'dino@0.0:offline.js:2279:3:draw","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":134,"kind":"function","parent":40,"name":"update 2308:3:2332:4","fullName":"'update(deltaTime, sp...$remove = true; } } }'dino@0.0:offline.js:2308:3:update","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":135,"kind":"function","parent":40,"name":"getGap 2341:3:2346:4","fullName":"'getGap(gapCoefficien...$m(minGap, maxGap); }'dino@0.0:offline.js:2341:3:getGap","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":136,"kind":"function","parent":40,"name":"isVisible 2352:3:2354:4","fullName":"'isVisible() { return this.xPos + this.width > 0; }'dino@0.0:offline.js:2352:3:isVisible","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":137,"kind":"function","parent":40,"name":"cloneCollisionBoxes 2360:3:2368:4","fullName":"'cloneCollisionBoxes(...$oxes[i].height); } }'dino@0.0:offline.js:2360:3:cloneCollisionBoxes","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":138,"kind":"function","parent":40,"name":"Trex 2379:1:2410:2","fullName":"'function Trex(canvas...$false; this.init();}'dino@0.0:offline.js:2379:1:Trex","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":139,"kind":"function","parent":40,"name":"init 2513:3:2521:4","fullName":"'init() { this.ground...$x.status.WAITING); }'dino@0.0:offline.js:2513:3:init","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":140,"kind":"function","parent":40,"name":"<anon> 2526:21:2532:4","fullName":"'function() { const j...$figForSlowSpeed(); }'dino@0.0:offline.js:2526:21:<anonymous>","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":141,"kind":"function","parent":40,"name":"<anon> 2538:22:2576:4","fullName":"'function(spritePos) ...$Pos; this.reset(); }'dino@0.0:offline.js:2538:22:<anonymous>","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":142,"kind":"function","parent":40,"name":"<anon> 2582:36:2592:4","fullName":"'function(opt_gravity...$_VELOCITY * 1.5; } }'dino@0.0:offline.js:2582:36:<anonymous>","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":143,"kind":"function","parent":40,"name":"<anon> 2598:16:2600:4","fullName":"'function(status) { this.flashing = status; }'dino@0.0:offline.js:2598:16:<anonymous>","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":144,"kind":"function","parent":40,"name":"setJumpVelocity 2607:3:2610:4","fullName":"'setJumpVelocity(sett...$TY = -setting / 2; }'dino@0.0:offline.js:2607:3:setJumpVelocity","callWeight":11,"callCount":1}},{"data":{"id":145,"kind":"function","parent":40,"name":"update 2617:3:2657:4","fullName":"'update(deltaTime, op...$s.setDuck(true); } }'dino@0.0:offline.js:2617:3:update","callWeight":89,"callCount":8,"isReachable":"true"}},{"data":{"id":146,"kind":"function","parent":40,"name":"draw 2664:3:2734:4","fullName":"'draw(x, y) { let sou...$x.globalAlpha = 1; }'dino@0.0:offline.js:2664:3:draw","callWeight":44,"callCount":4,"isReachable":"true"}},{"data":{"id":147,"kind":"function","parent":40,"name":"setBlinkDelay 2739:3:2741:4","fullName":"'setBlinkDelay() { th...$rex.BLINK_TIMING); }'dino@0.0:offline.js:2739:3:setBlinkDelay","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":148,"kind":"function","parent":40,"name":"blink 2747:3:2760:4","fullName":"'blink(time) { const ...$.blinkCount++; } } }'dino@0.0:offline.js:2747:3:blink","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":149,"kind":"function","parent":40,"name":"startJump 2766:3:2779:4","fullName":"'startJump(speed) { i...$N_JUMP_HEIGHT; } } }'dino@0.0:offline.js:2766:3:startJump","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":150,"kind":"function","parent":40,"name":"endJump 2784:3:2789:4","fullName":"'endJump() { if (this...$g.DROP_VELOCITY; } }'dino@0.0:offline.js:2784:3:endJump","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":151,"kind":"function","parent":40,"name":"updateJump 2795:3:2835:4","fullName":"'updateJump(deltaTime...$opFootSteps(); } } }'dino@0.0:offline.js:2795:3:updateJump","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":152,"kind":"function","parent":40,"name":"setSpeedDrop 2840:3:2843:4","fullName":"'setSpeedDrop() { thi...$.jumpVelocity = 1; }'dino@0.0:offline.js:2840:3:setSpeedDrop","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":153,"kind":"function","parent":40,"name":"setDuck 2848:3:2856:4","fullName":"'setDuck(isDucking) {...$ducking = false; } }'dino@0.0:offline.js:2848:3:setDuck","callWeight":33,"callCount":3,"isReachable":"true"}},{"data":{"id":154,"kind":"function","parent":40,"name":"reset 2861:3:2871:4","fullName":"'reset() { this.xPos ...$his.jumpCount = 0; }'dino@0.0:offline.js:2861:3:reset","callWeight":56,"callCount":5,"isReachable":"true"}},{"data":{"id":155,"kind":"function","parent":40,"name":"DistanceMeter 2884:1:2912:2","fullName":"'function DistanceMet...$.init(canvasWidth);}'dino@0.0:offline.js:2884:1:DistanceMeter","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":156,"kind":"function","parent":40,"name":"init 2963:3:2975:4","fullName":"'init(width) { let ma...$xDistanceStr, 10); }'dino@0.0:offline.js:2963:3:init","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":157,"kind":"function","parent":40,"name":"calcXPos 2981:3:2984:4","fullName":"'calcXPos(canvasWidth...$xScoreUnits + 1)); }'dino@0.0:offline.js:2981:3:calcXPos","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":158,"kind":"function","parent":40,"name":"draw 2992:3:3049:4","fullName":"'draw(digitPos, value...$nvasCtx.restore(); }'dino@0.0:offline.js:2992:3:draw","callWeight":33,"callCount":3,"isReachable":"true"}},{"data":{"id":159,"kind":"function","parent":40,"name":"getActualDistance 3056:3:3058:4","fullName":"'getActualDistance(di...$.COEFFICIENT) : 0; }'dino@0.0:offline.js:3056:3:getActualDistance","callWeight":44,"callCount":4,"isReachable":"true"}},{"data":{"id":160,"kind":"function","parent":40,"name":"update 3066:3:3124:4","fullName":"'update(deltaTime, di...$ return playSound; }'dino@0.0:offline.js:3066:3:update","callWeight":33,"callCount":3,"isReachable":"true"}},{"data":{"id":161,"kind":"function","parent":40,"name":"drawHighScore 3129:3:3138:4","fullName":"'drawHighScore() { if...$asCtx.restore(); } }'dino@0.0:offline.js:3129:3:drawHighScore","callWeight":33,"callCount":3,"isReachable":"true"}},{"data":{"id":162,"kind":"function","parent":40,"name":"setHighScore 3145:3:3151:4","fullName":"'setHighScore(distanc...$oreStr.split('')); }'dino@0.0:offline.js:3145:3:setHighScore","callWeight":33,"callCount":3,"isReachable":"true"}},{"data":{"id":163,"kind":"function","parent":40,"name":"hasClickedOnHighScore 3159:3:3178:4","fullName":"'hasClickedOnHighScor...$coreBounds.height; }'dino@0.0:offline.js:3159:3:hasClickedOnHighScore","callWeight":11,"callCount":1}},{"data":{"id":164,"kind":"function","parent":40,"name":"getHighScoreBounds 3184:3:3194:4","fullName":"'getHighScoreBounds()...$A_PADDING * 2), }; }'dino@0.0:offline.js:3184:3:getHighScoreBounds","callWeight":11,"callCount":1}},{"data":{"id":165,"kind":"function","parent":40,"name":"flashHighScore 3200:3:3229:4","fullName":"'flashHighScore() { c...$Score.bind(this)); }'dino@0.0:offline.js:3200:3:flashHighScore","callWeight":22,"callCount":2}},{"data":{"id":166,"kind":"function","parent":40,"name":"clearHighScoreBounds 3234:3:3241:4","fullName":"'clearHighScoreBounds...$nvasCtx.restore(); }'dino@0.0:offline.js:3234:3:clearHighScoreBounds","callWeight":22,"callCount":2}},{"data":{"id":167,"kind":"function","parent":40,"name":"startHighScoreFlashing 3246:3:3249:4","fullName":"'startHighScoreFlashi...$.flashHighScore(); }'dino@0.0:offline.js:3246:3:startHighScoreFlashing","callWeight":11,"callCount":1}},{"data":{"id":168,"kind":"function","parent":40,"name":"isHighScoreFlashing 3255:3:3257:4","fullName":"'isHighScoreFlashing(...$highScoreFlashing; }'dino@0.0:offline.js:3255:3:isHighScoreFlashing","callWeight":11,"callCount":1}},{"data":{"id":169,"kind":"function","parent":40,"name":"cancelHighScoreFlashing 3262:3:3271:4","fullName":"'cancelHighScoreFlash...$s.drawHighScore(); }'dino@0.0:offline.js:3262:3:cancelHighScoreFlashing","callWeight":33,"callCount":3}},{"data":{"id":170,"kind":"function","parent":40,"name":"resetHighScore 3276:3:3279:4","fullName":"'resetHighScore() { t...$ghScoreFlashing(); }'dino@0.0:offline.js:3276:3:resetHighScore","callWeight":11,"callCount":1}},{"data":{"id":171,"kind":"function","parent":40,"name":"reset 3284:3:3287:4","fullName":"'reset() { this.updat...$hievement = false; }'dino@0.0:offline.js:3284:3:reset","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":172,"kind":"function","parent":40,"name":"Cloud 3301:1:3314:2","fullName":"'function Cloud(canva...$_GAP); this.init();}'dino@0.0:offline.js:3301:1:Cloud","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":173,"kind":"function","parent":40,"name":"init 3335:3:3339:4","fullName":"'init() { this.yPos =...$VEL); this.draw(); }'dino@0.0:offline.js:3335:3:init","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":174,"kind":"function","parent":40,"name":"draw 3344:3:3362:4","fullName":"'draw() { this.canvas...$nvasCtx.restore(); }'dino@0.0:offline.js:3344:3:draw","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":175,"kind":"function","parent":40,"name":"update 3368:3:3378:4","fullName":"'update(speed) { if (...$remove = true; } } }'dino@0.0:offline.js:3368:3:update","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":176,"kind":"function","parent":40,"name":"isVisible 3384:3:3386:4","fullName":"'isVisible() { return...$.config.WIDTH > 0; }'dino@0.0:offline.js:3384:3:isVisible","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":177,"kind":"function","parent":40,"name":"BackgroundEl 3399:1:3416:2","fullName":"'function BackgroundE...$ = {}; this.init();}'dino@0.0:offline.js:3399:1:BackgroundEl","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":178,"kind":"function","parent":40,"name":"init 3438:3:3446:4","fullName":"'init() { this.sprite...$FSET; this.draw(); }'dino@0.0:offline.js:3438:3:init","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":179,"kind":"function","parent":40,"name":"draw 3451:3:3470:4","fullName":"'draw() { this.canvas...$nvasCtx.restore(); }'dino@0.0:offline.js:3451:3:draw","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":180,"kind":"function","parent":40,"name":"update 3476:3:3501:4","fullName":"'update(speed) { if (...$remove = true; } } }'dino@0.0:offline.js:3476:3:update","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":181,"kind":"function","parent":40,"name":"isVisible 3507:3:3509:4","fullName":"'isVisible() { return...$eConfig.WIDTH > 0; }'dino@0.0:offline.js:3507:3:isVisible","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":182,"kind":"function","parent":40,"name":"NightMode 3523:1:3536:2","fullName":"'function NightMode(c...$ this.placeStars();}'dino@0.0:offline.js:3523:1:NightMode","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":183,"kind":"function","parent":40,"name":"update 3559:3:3593:4","fullName":"'update(activated) { ...$.drawStars = true; }'dino@0.0:offline.js:3559:3:update","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":184,"kind":"function","parent":40,"name":"updateXPos 3595:3:3602:4","fullName":"'updateXPos(currentPo...$return currentPos; }'dino@0.0:offline.js:3595:3:updateXPos","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":185,"kind":"function","parent":40,"name":"draw 3604:3:3643:4","fullName":"'draw() { let moonSou...$nvasCtx.restore(); }'dino@0.0:offline.js:3604:3:draw","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":186,"kind":"function","parent":40,"name":"placeStars 3646:3:3663:4","fullName":"'placeStars() { const...$STAR_SIZE * i; } } }'dino@0.0:offline.js:3646:3:placeStars","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":187,"kind":"function","parent":40,"name":"reset 3665:3:3669:4","fullName":"'reset() { this.curre...$his.update(false); }'dino@0.0:offline.js:3665:3:reset","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":188,"kind":"function","parent":40,"name":"HorizonLine 3683:1:3707:2","fullName":"'function HorizonLine...$nfig); this.draw();}'dino@0.0:offline.js:3683:1:HorizonLine","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":189,"kind":"function","parent":40,"name":"setSourceDimensions 3725:3:3741:4","fullName":"'setSourceDimensions(...$ewDimensions.YPOS; }'dino@0.0:offline.js:3725:3:setSourceDimensions","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":190,"kind":"function","parent":40,"name":"getRandomType 3746:3:3748:4","fullName":"'getRandomType() { re...$ensions.WIDTH : 0; }'dino@0.0:offline.js:3746:3:getRandomType","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":191,"kind":"function","parent":40,"name":"draw 3753:3:3765:4","fullName":"'draw() { this.canvas...$imensions.HEIGHT); }'dino@0.0:offline.js:3753:3:draw","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":192,"kind":"function","parent":40,"name":"updateXPos 3772:3:3784:4","fullName":"'updateXPos(pos, incr...$his.spritePos.x; } }'dino@0.0:offline.js:3772:3:updateXPos","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":193,"kind":"function","parent":40,"name":"update 3791:3:3800:4","fullName":"'update(deltaTime, sp...$t); } this.draw(); }'dino@0.0:offline.js:3791:3:update","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":194,"kind":"function","parent":40,"name":"reset 3805:3:3808:4","fullName":"'reset() { this.xPos[...$.dimensions.WIDTH; }'dino@0.0:offline.js:3805:3:reset","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":195,"kind":"function","parent":40,"name":"Horizon 3822:1:3850:2","fullName":"'function Horizon(can...$ = []; this.init();}'dino@0.0:offline.js:3822:1:Horizon","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":196,"kind":"function","parent":40,"name":"init 3870:3:3881:4","fullName":"'init() { Obstacle.ty...$dimensions.WIDTH); }'dino@0.0:offline.js:3870:3:init","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":197,"kind":"function","parent":40,"name":"<anon> 3886:24:3900:4","fullName":"'function() { for (le...$[i].yPos[0]; } } } }'dino@0.0:offline.js:3886:24:<anonymous>","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":198,"kind":"function","parent":40,"name":"<anon> 3906:22:3928:4","fullName":"'function(spritePos) ...$); } this.reset(); }'dino@0.0:offline.js:3906:22:<anonymous>","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":199,"kind":"function","parent":40,"name":"update 3938:3:3957:4","fullName":"'update(deltaTime, cu...$, currentSpeed); } }'dino@0.0:offline.js:3938:3:update","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":200,"kind":"function","parent":40,"name":"updateBackgroundEl 3967:3:3986:4","fullName":"'updateBackgroundEl(e...$ElAddFunction(); } }'dino@0.0:offline.js:3967:3:updateBackgroundEl","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":201,"kind":"function","parent":40,"name":"updateClouds 3993:3:4001:4","fullName":"'updateClouds(deltaTi...$) => !obj.remove); }'dino@0.0:offline.js:3993:3:updateClouds","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":202,"kind":"function","parent":201,"name":"<anon> 4000:38:4000:58","fullName":"'(obj) => !obj.remove'dino@0.0:offline.js:4000:38:<anonymous>","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":203,"kind":"function","parent":40,"name":"updateBackgroundEls 4008:3:4015:4","fullName":"'updateBackgroundEls(...$) => !obj.remove); }'dino@0.0:offline.js:4008:3:updateBackgroundEls","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":204,"kind":"function","parent":203,"name":"<anon> 4014:52:4014:72","fullName":"'(obj) => !obj.remove'dino@0.0:offline.js:4014:52:<anonymous>","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":205,"kind":"function","parent":40,"name":"updateObstacles 4022:3:4050:4","fullName":"'updateObstacles(delt...$e(currentSpeed); } }'dino@0.0:offline.js:4022:3:updateObstacles","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":206,"kind":"function","parent":40,"name":"removeFirstObstacle 4052:3:4054:4","fullName":"'removeFirstObstacle() { this.obstacles.shift(); }'dino@0.0:offline.js:4052:3:removeFirstObstacle","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":207,"kind":"function","parent":40,"name":"addNewObstacle 4060:3:4090:4","fullName":"'addNewObstacle(curre...$_DUPLICATION); } } }'dino@0.0:offline.js:4060:3:addNewObstacle","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":208,"kind":"function","parent":40,"name":"duplicateObstacleCheck 4097:3:4105:4","fullName":"'duplicateObstacleChe...$TACLE_DUPLICATION; }'dino@0.0:offline.js:4097:3:duplicateObstacleCheck","callWeight":11,"callCount":1,"isReachable":"true"}},{"data":{"id":209,"kind":"function","parent":40,"name":"reset 4111:3:4118:4","fullName":"'reset() { this.obsta...$nightMode.reset(); }'dino@0.0:offline.js:4111:3:reset","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"id":210,"kind":"function","parent":40,"name":"resize 4125:3:4128:4","fullName":"'resize(width, height...$s.height = height; }'dino@0.0:offline.js:4125:3:resize","callWeight":0,"callCount":0}},{"data":{"id":211,"kind":"function","parent":40,"name":"addCloud 4133:3:4136:4","fullName":"'addCloud() { this.cl...$imensions.WIDTH)); }'dino@0.0:offline.js:4133:3:addCloud","callWeight":33,"callCount":3,"isReachable":"true"}},{"data":{"id":212,"kind":"function","parent":40,"name":"addBackgroundEl 4141:3:4160:4","fullName":"'addBackgroundEl() { ...$s.WIDTH, type)); } }'dino@0.0:offline.js:4141:3:addBackgroundEl","callWeight":22,"callCount":2,"isReachable":"true"}},{"data":{"kind":"call","source":28,"target":26}},{"data":{"kind":"call","source":33,"target":32}},{"data":{"kind":"call","source":34,"target":33}},{"data":{"kind":"call","source":34,"target":17}},{"data":{"kind":"call","source":34,"target":35}},{"data":{"kind":"call","source":36,"target":22}},{"data":{"kind":"call","source":36,"target":41}},{"data":{"kind":"call","source":37,"target":36}},{"data":{"kind":"call","source":21,"target":36}},{"data":{"kind":"call","source":16,"target":37}},{"data":{"kind":"call","source":38,"target":39}},{"data":{"kind":"call","source":124,"target":117}},{"data":{"kind":"call","source":124,"target":120}},{"data":{"kind":"call","source":124,"target":125}},{"data":{"kind":"call","source":124,"target":126}},{"data":{"kind":"call","source":124,"target":122}},{"data":{"kind":"call","source":124,"target":124}},{"data":{"kind":"call","source":131,"target":113}},{"data":{"kind":"call","source":131,"target":132}},{"data":{"kind":"call","source":132,"target":113}},{"data":{"kind":"call","source":132,"target":135}},{"data":{"kind":"call","source":132,"target":133}},{"data":{"kind":"call","source":132,"target":137}},{"data":{"kind":"call","source":135,"target":113}},{"data":{"kind":"call","source":145,"target":117}},{"data":{"kind":"call","source":145,"target":153}},{"data":{"kind":"call","source":145,"target":146}},{"data":{"kind":"call","source":145,"target":148}},{"data":{"kind":"call","source":145,"target":147}},{"data":{"kind":"call","source":165,"target":117}},{"data":{"kind":"call","source":165,"target":166}},{"data":{"kind":"call","source":165,"target":161}},{"data":{"kind":"call","source":165,"target":169}},{"data":{"kind":"call","source":165,"target":165}},{"data":{"kind":"call","source":172,"target":113}},{"data":{"kind":"call","source":172,"target":173}},{"data":{"kind":"call","source":173,"target":113}},{"data":{"kind":"call","source":173,"target":174}},{"data":{"kind":"call","source":177,"target":113}},{"data":{"kind":"call","source":177,"target":178}},{"data":{"kind":"call","source":186,"target":113}},{"data":{"kind":"call","source":196,"target":188}},{"data":{"kind":"call","source":196,"target":182}},{"data":{"kind":"call","source":196,"target":211}},{"data":{"kind":"call","source":198,"target":188}},{"data":{"kind":"call","source":198,"target":197}},{"data":{"kind":"call","source":198,"target":209}},{"data":{"kind":"call","source":207,"target":113}},{"data":{"kind":"call","source":207,"target":131}},{"data":{"kind":"call","source":207,"target":49}},{"data":{"kind":"call","source":207,"target":207}},{"data":{"kind":"call","source":207,"target":208}},{"data":{"kind":"call","source":207,"target":98}},{"data":{"kind":"call","source":211,"target":172}},{"data":{"kind":"call","source":212,"target":113}},{"data":{"kind":"call","source":212,"target":177}},{"data":{"kind":"call","source":53,"target":99}},{"data":{"kind":"call","source":53,"target":111}},{"data":{"kind":"call","source":53,"target":112}},{"data":{"kind":"call","source":53,"target":115}},{"data":{"kind":"call","source":53,"target":138}},{"data":{"kind":"call","source":53,"target":155}},{"data":{"kind":"call","source":53,"target":195}},{"data":{"kind":"call","source":53,"target":63}},{"data":{"kind":"call","source":53,"target":71}},{"data":{"kind":"call","source":53,"target":52}},{"data":{"kind":"call","source":53,"target":57}},{"data":{"kind":"call","source":53,"target":97}},{"data":{"kind":"call","source":53,"target":56}},{"data":{"kind":"call","source":53,"target":54}},{"data":{"kind":"call","source":59,"target":111}},{"data":{"kind":"call","source":59,"target":112}},{"data":{"kind":"call","source":59,"target":68}},{"data":{"kind":"call","source":59,"target":92}},{"data":{"kind":"call","source":59,"target":91}},{"data":{"kind":"call","source":59,"target":104}},{"data":{"kind":"call","source":59,"target":94}},{"data":{"kind":"call","source":86,"target":111}},{"data":{"kind":"call","source":86,"target":112}},{"data":{"kind":"call","source":86,"target":114}},{"data":{"kind":"call","source":86,"target":117}},{"data":{"kind":"call","source":86,"target":118}},{"data":{"kind":"call","source":86,"target":70}},{"data":{"kind":"call","source":86,"target":69}},{"data":{"kind":"call","source":86,"target":85}},{"data":{"kind":"call","source":86,"target":87}},{"data":{"kind":"call","source":86,"target":95}},{"data":{"kind":"call","source":86,"target":159}},{"data":{"kind":"call","source":86,"target":145}},{"data":{"kind":"call","source":86,"target":123}},{"data":{"kind":"call","source":86,"target":102}},{"data":{"kind":"call","source":89,"target":111}},{"data":{"kind":"call","source":89,"target":112}},{"data":{"kind":"call","source":89,"target":117}},{"data":{"kind":"call","source":89,"target":63}},{"data":{"kind":"call","source":89,"target":96}},{"data":{"kind":"call","source":89,"target":95}},{"data":{"kind":"call","source":89,"target":60}},{"data":{"kind":"call","source":89,"target":52}},{"data":{"kind":"call","source":89,"target":68}},{"data":{"kind":"call","source":89,"target":90}},{"data":{"kind":"call","source":89,"target":209}},{"data":{"kind":"call","source":89,"target":171}},{"data":{"kind":"call","source":89,"target":154}},{"data":{"kind":"call","source":89,"target":126}},{"data":{"kind":"call","source":89,"target":104}},{"data":{"kind":"call","source":50,"target":116}},{"data":{"kind":"call","source":50,"target":51}},{"data":{"kind":"call","source":63,"target":117}},{"data":{"kind":"call","source":63,"target":127}},{"data":{"kind":"call","source":63,"target":49}},{"data":{"kind":"call","source":63,"target":82}},{"data":{"kind":"call","source":63,"target":96}},{"data":{"kind":"call","source":63,"target":95}},{"data":{"kind":"call","source":63,"target":86}},{"data":{"kind":"call","source":63,"target":58}},{"data":{"kind":"call","source":63,"target":60}},{"data":{"kind":"call","source":63,"target":62}},{"data":{"kind":"call","source":63,"target":98}},{"data":{"kind":"call","source":63,"target":206}},{"data":{"kind":"call","source":63,"target":199}},{"data":{"kind":"call","source":63,"target":159}},{"data":{"kind":"call","source":63,"target":160}},{"data":{"kind":"call","source":63,"target":151}},{"data":{"kind":"call","source":63,"target":143}},{"data":{"kind":"call","source":63,"target":145}},{"data":{"kind":"call","source":63,"target":108}},{"data":{"kind":"call","source":63,"target":109}},{"data":{"kind":"call","source":74,"target":117}},{"data":{"kind":"call","source":74,"target":88}},{"data":{"kind":"call","source":74,"target":80}},{"data":{"kind":"call","source":74,"target":81}},{"data":{"kind":"call","source":74,"target":61}},{"data":{"kind":"call","source":74,"target":83}},{"data":{"kind":"call","source":74,"target":154}},{"data":{"kind":"call","source":74,"target":150}},{"data":{"kind":"call","source":74,"target":153}},{"data":{"kind":"call","source":88,"target":117}},{"data":{"kind":"call","source":88,"target":63}},{"data":{"kind":"call","source":88,"target":90}},{"data":{"kind":"call","source":88,"target":145}},{"data":{"kind":"call","source":88,"target":104}},{"data":{"kind":"call","source":127,"target":128}},{"data":{"kind":"call","source":127,"target":129}},{"data":{"kind":"call","source":127,"target":130}},{"data":{"kind":"call","source":127,"target":49}},{"data":{"kind":"call","source":127,"target":98}},{"data":{"kind":"call","source":127,"target":39}},{"data":{"kind":"call","source":205,"target":207}},{"data":{"kind":"call","source":205,"target":134}},{"data":{"kind":"call","source":205,"target":136}},{"data":{"kind":"call","source":203,"target":200}},{"data":{"kind":"call","source":203,"target":204}},{"data":{"kind":"call","source":203,"target":212}},{"data":{"kind":"call","source":201,"target":200}},{"data":{"kind":"call","source":201,"target":202}},{"data":{"kind":"call","source":201,"target":211}},{"data":{"kind":"call","source":199,"target":205}},{"data":{"kind":"call","source":199,"target":201}},{"data":{"kind":"call","source":199,"target":203}},{"data":{"kind":"call","source":199,"target":183}},{"data":{"kind":"call","source":199,"target":193}},{"data":{"kind":"call","source":193,"target":191}},{"data":{"kind":"call","source":193,"target":192}},{"data":{"kind":"call","source":192,"target":190}},{"data":{"kind":"call","source":187,"target":183}},{"data":{"kind":"call","source":183,"target":186}},{"data":{"kind":"call","source":183,"target":185}},{"data":{"kind":"call","source":183,"target":184}},{"data":{"kind":"call","source":180,"target":181}},{"data":{"kind":"call","source":180,"target":179}},{"data":{"kind":"call","source":178,"target":179}},{"data":{"kind":"call","source":175,"target":176}},{"data":{"kind":"call","source":175,"target":174}},{"data":{"kind":"call","source":171,"target":160}},{"data":{"kind":"call","source":170,"target":169}},{"data":{"kind":"call","source":170,"target":162}},{"data":{"kind":"call","source":169,"target":161}},{"data":{"kind":"call","source":169,"target":166}},{"data":{"kind":"call","source":167,"target":165}},{"data":{"kind":"call","source":163,"target":164}},{"data":{"kind":"call","source":162,"target":159}},{"data":{"kind":"call","source":161,"target":158}},{"data":{"kind":"call","source":160,"target":161}},{"data":{"kind":"call","source":160,"target":158}},{"data":{"kind":"call","source":160,"target":159}},{"data":{"kind":"call","source":156,"target":158}},{"data":{"kind":"call","source":156,"target":157}},{"data":{"kind":"call","source":154,"target":145}},{"data":{"kind":"call","source":153,"target":145}},{"data":{"kind":"call","source":151,"target":154}},{"data":{"kind":"call","source":151,"target":150}},{"data":{"kind":"call","source":151,"target":105}},{"data":{"kind":"call","source":149,"target":145}},{"data":{"kind":"call","source":148,"target":147}},{"data":{"kind":"call","source":148,"target":146}},{"data":{"kind":"call","source":139,"target":145}},{"data":{"kind":"call","source":139,"target":146}},{"data":{"kind":"call","source":134,"target":136}},{"data":{"kind":"call","source":134,"target":133}},{"data":{"kind":"call","source":123,"target":124}},{"data":{"kind":"call","source":123,"target":121}},{"data":{"kind":"call","source":123,"target":122}},{"data":{"kind":"call","source":123,"target":120}},{"data":{"kind":"call","source":109,"target":103}},{"data":{"kind":"call","source":108,"target":103}},{"data":{"kind":"call","source":108,"target":107}},{"data":{"kind":"call","source":107,"target":103}},{"data":{"kind":"call","source":104,"target":105}},{"data":{"kind":"call","source":104,"target":103}},{"data":{"kind":"call","source":102,"target":107}},{"data":{"kind":"call","source":94,"target":88}},{"data":{"kind":"call","source":94,"target":87}},{"data":{"kind":"call","source":94,"target":154}},{"data":{"kind":"call","source":92,"target":93}},{"data":{"kind":"call","source":87,"target":90}},{"data":{"kind":"call","source":87,"target":102}},{"data":{"kind":"call","source":80,"target":89}},{"data":{"kind":"call","source":80,"target":85}},{"data":{"kind":"call","source":80,"target":169}},{"data":{"kind":"call","source":80,"target":167}},{"data":{"kind":"call","source":80,"target":170}},{"data":{"kind":"call","source":80,"target":168}},{"data":{"kind":"call","source":80,"target":163}},{"data":{"kind":"call","source":78,"target":79}},{"data":{"kind":"call","source":78,"target":77}},{"data":{"kind":"call","source":77,"target":78}},{"data":{"kind":"call","source":76,"target":78}},{"data":{"kind":"call","source":76,"target":76}},{"data":{"kind":"call","source":75,"target":76}},{"data":{"kind":"call","source":73,"target":95}},{"data":{"kind":"call","source":73,"target":63}},{"data":{"kind":"call","source":73,"target":90}},{"data":{"kind":"call","source":73,"target":50}},{"data":{"kind":"call","source":73,"target":66}},{"data":{"kind":"call","source":73,"target":55}},{"data":{"kind":"call","source":73,"target":61}},{"data":{"kind":"call","source":73,"target":153}},{"data":{"kind":"call","source":73,"target":152}},{"data":{"kind":"call","source":73,"target":149}},{"data":{"kind":"call","source":73,"target":107}},{"data":{"kind":"call","source":72,"target":91}},{"data":{"kind":"call","source":71,"target":91}},{"data":{"kind":"call","source":71,"target":69}},{"data":{"kind":"call","source":71,"target":66}},{"data":{"kind":"call","source":71,"target":67}},{"data":{"kind":"call","source":68,"target":70}},{"data":{"kind":"call","source":68,"target":197}},{"data":{"kind":"call","source":68,"target":140}},{"data":{"kind":"call","source":66,"target":73}},{"data":{"kind":"call","source":66,"target":68}},{"data":{"kind":"call","source":66,"target":100}},{"data":{"kind":"call","source":58,"target":89}},{"data":{"kind":"call","source":58,"target":90}},{"data":{"kind":"call","source":58,"target":59}},{"data":{"kind":"call","source":57,"target":87}},{"data":{"kind":"call","source":57,"target":60}},{"data":{"kind":"call","source":57,"target":93}},{"data":{"kind":"call","source":57,"target":91}},{"data":{"kind":"call","source":57,"target":97}},{"data":{"kind":"call","source":57,"target":199}},{"data":{"kind":"call","source":57,"target":160}},{"data":{"kind":"call","source":57,"target":157}},{"data":{"kind":"call","source":57,"target":146}},{"data":{"kind":"call","source":57,"target":145}},{"data":{"kind":"call","source":57,"target":123}},{"data":{"kind":"call","source":57,"target":119}},{"data":{"kind":"call","source":48,"target":53}},{"data":{"kind":"call","source":48,"target":47}},{"data":{"kind":"call","source":46,"target":52}},{"data":{"kind":"call","source":46,"target":144}},{"data":{"kind":"call","source":41,"target":49}},{"data":{"kind":"call","source":41,"target":98}},{"data":{"kind":"call","source":41,"target":48}},{"data":{"kind":"call","source":41,"target":42}},{"data":{"kind":"call","source":41,"target":44}},{"data":{"kind":"call","source":41,"target":43}},{"data":{"kind":"call","source":44,"target":45}},{"data":{"kind":"call","source":64,"target":65}},{"data":{"kind":"call","source":65,"target":75}},{"data":{"kind":"call","source":65,"target":74}},{"data":{"kind":"call","source":65,"target":73}},{"data":{"kind":"call","source":106,"target":103}},{"data":{"kind":"call","source":62,"target":198}},{"data":{"kind":"call","source":62,"target":141}},{"data":{"kind":"call","source":62,"target":104}},{"data":{"kind":"call","source":195,"target":196}},{"data":{"kind":"call","source":188,"target":191}},{"data":{"kind":"call","source":188,"target":189}},{"data":{"kind":"call","source":209,"target":187}},{"data":{"kind":"call","source":209,"target":194}},{"data":{"kind":"call","source":182,"target":186}},{"data":{"kind":"call","source":84,"target":162}},{"data":{"kind":"call","source":85,"target":162}},{"data":{"kind":"call","source":155,"target":156}},{"data":{"kind":"call","source":138,"target":139}},{"data":{"kind":"call","source":82,"target":63}},{"data":{"kind":"call","source":200,"target":212}},{"data":{"kind":"call","source":200,"target":211}},{"data":{"kind":"call","source":200,"target":175}},{"data":{"kind":"call","source":200,"target":180}},{"data":{"kind":"call","source":141,"target":154}},{"data":{"kind":"call","source":141,"target":142}},{"data":{"kind":"call","source":140,"target":142}},{"data":{"kind":"call","source":128,"target":39}},{"data":{"kind":"call","source":137,"target":39}},{"data":{"kind":"call","source":40,"target":39}},{"data":{"kind":"require","source":16,"target":2}},{"data":{"kind":"require","source":16,"target":40}},{"data":{"kind":"require","source":40,"target":2}},{"data":{"kind":"require","source":40,"target":38}}],"info":"Packages: 1\nModules: 5\nFunctions: 206\nCall edges: 311\nMax number of calls for packages: 311, modules: 294, functions: 9"}]};
+      let graph;
+
+      function showVulnerabilities() {
+        if (!graph.vulnerabilities)
+          return;
+
+        stopLayout();
+        const vulnerabilityTitle = document.getElementById("vulnerabilities").value;
+        const e = document.getElementsByName("vulnerabilityLevel");
+        let level = "package";
+        for (let i = 0; i < e.length; i++)
+          if (e[i].checked) {
+            level = e[i].value;
+            break;
+          }
+        const sources = new Set(), targets = new Set();
+        for (const v of graph.vulnerabilities)
+          if (v.title === vulnerabilityTitle) {
+            for (const s of v[level].sources)
+              sources.add(String(s));
+            for (const s of v[level].targets)
+              targets.add(String(s));
+          }
+        function has(collection, node) {
+          return collection.has(node.data("id")) || (ec.isExpandable(node) && ec.getCollapsedChildrenRecursively(node).some(n => collection.has(n.data("id"))));
+        }
+        cy.batch(() => {
+          cy.nodes().forEach(node => {
+            node.removeData("isSource isTarget");
+            if (has(sources, node))
+              node.data("isSource", true);
+            if (has(targets, node))
+              node.data("isTarget", true);
+          });
+          cy.edges().forEach(edge => {
+            edge.removeData("sourceTarget");
+            const source = edge.source();
+            const target = edge.target();
+            if (has(sources, source) && (has(targets, target) || has(sources, target)))
+              edge.data("sourceTarget", true);
+          });
+         cy.elements().removeClass("workaround");
+       });
+      }
+      document.getElementById("vulnerabilities").addEventListener("change", showVulnerabilities);
+      document.getElementById("vulnerabilityLevel").addEventListener("change", showVulnerabilities);
+
+      function setGraph(i) {
+        stopLayout();
+        removed = undefined;
+        cy.elements().remove();
+        graph = data.graphs[i];
+        cy.add(structuredClone(graph.elements));
+        ec.collapseAll();
+        ec.collapseAllEdges();
+        if (graph.kind === "callgraph")
+          document.body.classList.remove("callgraphModeHidden");
+        if (graph.kind === "dataflow")
+          document.body.classList.remove("dataflowModeHidden");
+        document.getElementById("showValueDensity").checked = false;
+        if (graph.info)
+          document.getElementById("info").innerText = graph.info;
+        document.getElementById("threshold").value = 0;
+        if (graph.vulnerabilities) {
+          const vulnerabilities = document.getElementById("vulnerabilities");
+          const vulnerabilityLevel = document.getElementById("vulnerabilityLevel");
+          vulnerabilities.hidden = false;
+          vulnerabilityLevel.hidden = false;
+          for (let i = 0; i < graph.vulnerabilities.length; i++) {
+            const opt = document.createElement("option");
+            opt.value = opt.innerText = graph.vulnerabilities[i].title;
+            vulnerabilities.appendChild(opt);
+          }
+          showVulnerabilities();
+        }
+        newLayout(true);
+      }
+
+      if (data.graphs.length >= 1) {
+        setGraph(0);
+        if (data.graphs.length > 1) {
+          const dataset = document.getElementById('dataset');
+          dataset.hidden = false;
+          for (let i = 0; i < data.graphs.length; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.innerText = data.graphs[i].title ?? "";
+            dataset.appendChild(opt);
+          }
+          document.getElementById("dataset").addEventListener("change", e => {
+            setGraph(e.target.value);
+          });
+        }
+      }
+    });
+  </script>
+</head>
+<body class="callgraphModeHidden dataflowModeHidden">
+<header>
+<h1>Jelly visualizer</h1>
+<div id="info"></div>
+<div id="control">
+<div class="group">
+<button id="collapseAll">Collapse all</button>
+<button id="collapseSelected">Collapse selected</button>
+<button id="expandSelected">Expand selected</button>
+<span class="callgraphMode"><button id="expandAllPackages">Expand all packages</button></span>
+<button id="expandAll">Expand all</button>
+</div>
+<br/>
+<div class="group">
+<button id="showPredecessors">Show predecessors</button>
+<button id="removeSelected">Remove selected</button>
+<button id="removeNonSelected">Remove non-selected</button>
+</div>
+<br/>
+<div class="group">
+<button id="layout">Layout</button>
+</div>
+<br/>
+<div class="group">
+<span class="callgraphMode">
+<input type="checkbox" id="showCallDensity"><label for="showCallDensity"> Show call density</label>
+<br/>
+<input type="checkbox" id="highlightReachable"><label for="highlightReachable"> Highlight reachable</label>
+<br/>
+<input type="checkbox" id="hideUnreachable"><label for="hideUnreachable"> Hide unreachable</label>
+</span>
+<span class="dataflowMode">
+<input type="checkbox" id="showValueDensity"><label for="showValueDensity"> Show value density</label>
+</span>
+</div>
+<span id="fields">
+<br/>
+<label for="threshold">Threshold: </label><input type="number" id="threshold" value="0" min="0">
+<br/>
+</span>
+<div class="group">
+<span id="vulnerabilityLevel" hidden>
+Vulnerabilities:<br/>
+<select id="vulnerabilities" hidden><option></option></select>
+<br/>
+<input type="radio" name="vulnerabilityLevel" id="vulnerabilityLevelPackage" value="package" checked><label for="vulnerabilityLevelPackage">Package dependency</label>
+<br/>
+<input type="radio" name="vulnerabilityLevel" id="vulnerabilityLevelModule" value="module"><label for="vulnerabilityLevelModule">Module dependency</label>
+<br/>
+<input type="radio" name="vulnerabilityLevel" id="vulnerabilityLevelFunction" value="function"><label for="vulnerabilityLevelFunction">Function reachability</label>
+</span>
+</div>
+</div>
+<select id="dataset" hidden></select>
+<div id="msg"></div>
+</header>
+<div id="cy"></div>
+</body>
+</html>
