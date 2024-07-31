@@ -39,11 +39,10 @@ TextEffectController = function(canvas) {
 }
 
 TextEffectController.config = {
-    TREX_X: 30,
-    TREX_Y: 55,
+    TREX_X: 65,
+    TREX_Y: 45,
     TREX_ALIGN: 'left',
-    TREX_FONT1: '14px serif',
-    TREX_FONT2: '16px sans-serif',
+    TREX_FONT: '14px serif',
     SCORE_X: 290,
     SCORE_Y: 13,
     SCORE_ALIGN: 'right',
@@ -63,7 +62,7 @@ TextEffectController.prototype = {
                 TextEffectController.config.TREX_Y,
                 content,
                 TextEffectController.config.TREX_ALIGN,
-                TextEffectController.config.TREX_FONT1,
+                TextEffectController.config.TREX_FONT,
                 true,
                 350
             ));
@@ -94,6 +93,26 @@ TextEffectController.prototype = {
                 content,
                 TextEffectController.config.REMARK_ALIGN,
                 TextEffectController.config.REMARK_FONT,
+                false,
+                500
+            ));
+        } else if(type == 'status') {
+            this.queue.push(new TextEffectInstance(this.canvas, 
+                TextEffectController.config.TREX_X, 
+                TextEffectController.config.TREX_Y + 10,
+                content,
+                TextEffectController.config.TREX_ALIGN,
+                TextEffectController.config.TREX_FONT,
+                true,
+                350
+            ));
+        } else if(type == 'timing') {
+            this.queue.push(new TextEffectInstance(this.canvas, 
+                TextEffectController.config.REMARK_X, 
+                TextEffectController.config.REMARK_Y + 4,
+                content,
+                TextEffectController.config.REMARK_ALIGN,
+                TextEffectController.config.TREX_FONT,
                 false,
                 500
             ));

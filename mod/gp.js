@@ -2,6 +2,47 @@
 Runner.mikiriTime = 0;
 Runner.collisionTime = Infinity;
 Runner.gameoverflag = 0;
+Runner.skillStartTime = 0;
+Runner.perfect = 0;
+Runner.energy = 0;
+Runner.ap = 100;
+Runner.lastJump = 0;
+Runner.lastdt = 0;
+Runner.lag = 0;
+Runner.judges = [];
+Runner.immortalStartTime = 0;
+Runner.immortalLength = 0;
+Runner.immortalStartFlag = false;
+Runner.debugDeltaTime = 0;
+Runner.lastImmortalJudge = 0;
+
+function skill1xpos(dt){
+  var x=0;
+  if(dt > 0 && dt < 50){
+    x=0.024*dt*(dt-100);
+  } else if(dt >= 50 && dt < 75){
+    x=(-0.112)*dt*dt+16.8*dt-620;
+  } else if(dt >= 75 && dt < 100){
+    x=10-2*Math.sqrt(dt-75);
+  } else {
+    x=0;
+  }
+  return x;
+}
+
+function skill1Eff(dt){
+  var dy=0;
+  if(dt <= 50.005){
+    dy = 5 * Math.atan(dt - 5.8) + 7;
+  } else {
+    dy = -5 * Math.atan(dt - 94.21) + 7;
+  }
+  Runner.instance_.canvasCtx.fillRect(0, 105-dy*0.05, 600*dt/20, dy*0.1);
+}
+
+function immortalTime(){
+  return 3600 / (Runner.debugDeltaTime / Runner.instance_.currentSpeed);
+}
 
 Runner.prototype.onKeyUp = function (e) {
     const keyCode = String(e.keyCode);
@@ -15,9 +56,17 @@ Runner.prototype.onKeyUp = function (e) {
         this.tRex.setDuck(false);
 
         //INFOCO_MODIFIED
-        Runner.mikiriTime = new Date().getTime(); //抬头时刻
+        var nowtime = new Date().getTime();
+        Runner.mikiriTime = nowtime; //抬头时刻
         Runner.LastDuckingLength = Runner.mikiriTime - Runner.duckingStartTime;
         Runner.duckingStartTime = Infinity;
+        if(Runner.energy == 100){
+          Runner.immortalStartTime = nowtime;
+          Runner.immortalLength = immortalTime();
+          Runner.energy = 0;
+          Runner.immortalStartFlag = true;
+          Runner.textEffectController.push('status', '+必杀剑·地天');
+        }
 
     } else if (this.crashed) {
         // Check that enough time has elapsed before allowing jump key to restart.
@@ -37,7 +86,9 @@ Runner.prototype.onKeyUp = function (e) {
 }
 
 Runner.prototype.update = function() {
+    var nowtime = new Date().getTime(); //获取当前时间
     this.updatePending = false;
+    var isImmortal = (nowtime - Runner.immortalStartTime <= Runner.immortalLength);
 
     const now = getTimeStamp();
     let deltaTime = now - (this.time || now);
@@ -57,6 +108,20 @@ Runner.prototype.update = function() {
 
     if (this.playing) {
       this.clearCanvas();
+
+      //INFOCO MODIFIED
+      var dt = (nowtime - Runner.mikiriTime)/4;
+      Runner.instance_.tRex.xInitialPos = 60 + skill1xpos(dt);
+      Runner.instance_.tRex.xPos = 60 + skill1xpos(dt);
+      if(!this.tRex.jumping){
+        if(Runner.ap + deltaTime*0.04 > 100){
+          Runner.ap = 100;
+        } else {
+          Runner.ap += deltaTime*0.08;
+        }
+      }
+
+      Runner.debugDeltaTime =  deltaTime;
 
       // Additional fade in - Prevents jump when switching sprites
       if (this.altGameModeActive &&
@@ -88,10 +153,14 @@ Runner.prototype.update = function() {
         this.horizon.update(
             deltaTime, this.currentSpeed, hasObstacles, showNightMode);
       }
-
+      
+      //INFOCO MODIFIED
+      var collision;
       // Check for collisions.
-      let collision = hasObstacles &&
-          checkForCollision(this.horizon.obstacles[0], this.tRex);
+      if(Runner.skillStartTime == 0){
+        collision = hasObstacles &&
+            checkForCollision(this.horizon.obstacles[0], this.tRex);
+      }
 
       // For a11y, audio cues.
       if (Runner.audioCues && hasObstacles) {
@@ -126,7 +195,7 @@ Runner.prototype.update = function() {
       }
 
       // INFOCO MODIFIED BEGIN
-      var nowtime = new Date().getTime(); //获取当前时间
+      
 
       if((!collision) && (nowtime - Runner.collisionTime <= 200)){
         this.distanceRan += this.currentSpeed * deltaTime / this.msPerFrame;
@@ -143,25 +212,73 @@ Runner.prototype.update = function() {
         collision = false;
       }
 
-      var absdt = Math.abs(Runner.mikiriTime - Runner.collisionTime);
-      var texteffect = 0;
-
-      if (absdt <= 160 && Runner.LastDuckingLength >= 1100) { // 如果头部下压时间大于咏唱时间并且±80ms内GP成功则能够取消掉这次 game over
+      if(Runner.collisionTime != Infinity && isImmortal && nowtime - Runner.lastImmortalJudge > 20){
         Runner.collisionTime = Infinity;
-        this.horizon.obstacles[0].remove = true;
-        this.playSound(this.soundFx.BUTTON_PRESS);
-        if(absdt <= 40){ // 如果±40ms内GP成功则额外加分
+        this.playSound(this.soundFx.SCORE);
+        Runner.textEffectController.push('trex', '必杀剑·地天 2000');
+        Runner.instance_.playingIntro = true;
+        Runner.perfect = 3;
+        Runner.lastImmortalJudge = nowtime;
+      }
+
+      var absdt = Math.abs(Runner.mikiriTime - Runner.collisionTime - 24 + Runner.lag); //调延迟需要手输代码
+
+      if(Runner.immortalStartFlag){
+        Runner.immortalStartFlag = false;
+      }else{
+        if (absdt <= 160 && Runner.LastDuckingLength >= 930) { // 如果头部下压时间大于咏唱时间并且±80ms内GP成功则能够取消掉这次 game over
+          Runner.lastdt = Runner.mikiriTime - Runner.collisionTime - 24 + Runner.lag;
+          Runner.collisionTime = Infinity;
+          this.playSound(this.soundFx.SCORE);
+          Runner.skillStartTime = nowtime;
+          Runner.instance_.playingIntro = true;
+          if(absdt <= 40){
+            Runner.perfect = 1;
+            Runner.textEffectController.push('trex', '斩铁剑 58500');
+            Runner.textEffectController.push('status', '+崩破');
+          } else {
+            Runner.perfect = 2;
+            Runner.textEffectController.push('trex', '斩铁剑 24000');
+          }
+        }
+      }
+
+      if (nowtime - Runner.mikiriTime > 400 && Runner.perfect != 0) {
+        if(Runner.perfect == 1){
+          Runner.instance_.playingIntro = false;
           Runner.instance_.distanceMeter.addBonus(1000);
-          Runner.textEffectController.push('trex', '斩铁剑 58500');
           Runner.textEffectController.push('score', '+1000');
           Runner.textEffectController.push('remark', 'PERFECT');
-          texteffect = 1000;
-        } else {
+          this.horizon.obstacles[0].remove = true;
+          Runner.skillStartTime = 0;
+          Runner.perfect = 0;
+          Runner.gauge.addEnergy(25);
+        } else if(Runner.perfect == 2){
+          Runner.instance_.playingIntro = false;
           Runner.instance_.distanceMeter.addBonus(500);
-          Runner.textEffectController.push('trex', '斩铁剑 48000');
           Runner.textEffectController.push('score', '+500');
           Runner.textEffectController.push('remark', 'GOOD');
-          texteffect = 500;
+          this.horizon.obstacles[0].remove = true;
+          Runner.skillStartTime = 0;
+          Runner.perfect = 0;
+          Runner.gauge.addEnergy(10);
+        } else if (Runner.perfect == 3) {
+          Runner.instance_.playingIntro = false;
+          Runner.perfect = 0;
+          this.horizon.obstacles[0].remove = true;
+          Runner.textEffectController.push('score', '+250');
+          Runner.textEffectController.push('remark', 'AUTOPLAY');
+          Runner.instance_.distanceMeter.addBonus(250);
+        } else {
+          return;
+        }
+        if(!isImmortal){
+          Runner.judges.push(Runner.lastdt);
+          if(Runner.lastdt < 0){
+            Runner.textEffectController.push('timing', 'EARLY ' + Runner.lastdt.toString() + 'ms');
+          } else {
+            Runner.textEffectController.push('timing', 'LATE +' + Runner.lastdt.toString() + 'ms');
+          }
         }
       }
 
@@ -222,8 +339,11 @@ Runner.prototype.update = function() {
       this.scheduleNextUpdate();
     }
 
-    //INFOCO MODIFY
     // INFOCO MODIFY
+    if(dt >= 50 && dt < 100 && (!Runner.casting.Interrupted) && !isImmortal){
+      skill1Eff(dt/2);
+    }
+
     if(!this.inverted){
       this.canvasCtx.fillStyle = '#000000';
       this.canvasCtx.strokeStyle = '#000000';
@@ -234,6 +354,7 @@ Runner.prototype.update = function() {
     Runner.life.update();
     Runner.textEffectController.update();
     Runner.casting.update();
+    Runner.gauge.update();
   }
 
 Runner.prototype.restart = function () {
@@ -249,10 +370,22 @@ Runner.prototype.restart = function () {
     this.setPlayStatus(true);
     this.toggleSpeed();
     this.paused = false;
-    /**INFOCO MODIFIED*/ Runner.mikiriTime = 0;
-    /**INFOCO MODIFIED*/ Runner.collisionTime = Infinity;
-    /**INFOCO MODIFIED*/ Runner.life = new Life(Runner.instance_.canvas, Runner.instance_.dimensions.WIDTH)
-    /**INFOCO MODIFIED*/ Runner.gameoverflag = 0;
+
+    /**INFOCO MODIFIED*/ 
+    Runner.mikiriTime = 0;
+    Runner.collisionTime = Infinity;
+    Runner.life = new Life(Runner.instance_.canvas, Runner.instance_.dimensions.WIDTH)
+    Runner.gameoverflag = 0;
+    Runner.perfect = 0;
+    Runner.skillStartTime = 0;
+    Runner.instance_.playingIntro = false;
+    Runner.energy = 0;
+    Runner.ap = 100;
+    Runner.lastdt = 0;
+    Runner.immortalStartTime = 0;
+    Runner.immortalLength = 0;
+    Runner.immortalStartFlag = false;
+
     this.crashed = false;
     this.distanceRan = 0;
     this.setSpeed(this.config.SPEED);

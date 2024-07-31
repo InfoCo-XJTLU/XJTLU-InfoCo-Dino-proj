@@ -51,7 +51,18 @@ Runner.prototype.onKeyDown = function (e) {
                     } else {
                         this.playSound(this.soundFx.BUTTON_PRESS);
                     }
-                    this.tRex.startJump(this.currentSpeed);
+                    let thisJump = new Date().getTime();
+                    if(Runner.ap >= 30 && thisJump - Runner.lastJump >= 10){
+                        Runner.ap -= 30;
+                        this.tRex.startJump(this.currentSpeed);
+                        Runner.lastJump = thisJump;
+                    }
+                    if(Runner.energy == 100 && Runner.life.count < 5){
+                        Runner.energy = 0;
+                        Runner.life.count += 1;
+                        Runner.textEffectController.push('trex', '自愈 15000');
+                        Runner.textEffectController.push('life', '+1 HP');
+                    }
                 }
             } else if (this.playing && Runner.keycodes.DUCK[e.keyCode]) {
                 e.preventDefault();
@@ -61,7 +72,6 @@ Runner.prototype.onKeyDown = function (e) {
                 } else if (!this.tRex.jumping && !this.tRex.ducking) {
                     // Duck.
                     this.tRex.setDuck(true);
-                    Runner.duckingStartTime = new Date().getTime();
                 }
             }
         }
